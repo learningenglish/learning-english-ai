@@ -17,7 +17,8 @@ animation:tooltipIn .15s ease
 oninput="setVolume(this.value)" title="Âm lượng"></div><div class="ab-speed-wrap"><button class="ab-speed-btn" id="speedBtn" onclick="toggleSpeedDropdown()" title="Tốc độ">1x</button><div class="ab-speed-dd" id="speedDropdown"><div onclick="setSpeed(0.8)">0.8x</div><div onclick="setSpeed(1)" class="active">1x</div><div onclick="setSpeed(1.25)">1.25x</div><div onclick="setSpeed(1.5)">1.5x</div><div onclick="setSpeed(2)">2x</div></div></div></div></div><div id="out"></div></div></div><script>
 // ====== KẾT NỐI CLOUDFLARE WORKER (thay cho việc gọi OpenAI trực tiếp + lưu API key) ======
 // Đổi URL này thành URL Worker thật của bạn sau khi deploy (lệnh `wrangler deploy` sẽ in ra).
-const WORKER_URL = "learning-english-ai-worker";
+const response = await fetch(
+  "https://learning-english-ai.kimchinamvn.workers.dev/api/chat",
 
 // Phải GIỐNG HỆT giá trị bạn đặt bằng `wrangler secret put APP_SECRET`.
 // Đây không phải xác thực thật (frontend tĩnh thì vẫn đọc được qua DevTools nếu cố tình tìm),
