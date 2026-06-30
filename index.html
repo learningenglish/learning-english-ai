@@ -22,7 +22,7 @@ const WORKER_URL = "https://learning-english-ai.kimchinamvn.workers.dev/api/chat
 // Phải GIỐNG HỆT giá trị bạn đặt bằng `wrangler secret put APP_SECRET`.
 // Đây không phải xác thực thật (frontend tĩnh thì vẫn đọc được qua DevTools nếu cố tình tìm),
 // chỉ chặn được bot/script quét URL ngẫu nhiên trên Internet.
-const APP_SECRET = "giá trị thật";
+const APP_SECRET = "Learning-English-AI";
 
 /**
  * Gọi 1 action trên Worker. Worker tự ráp prompt và gọi OpenAI — frontend chỉ gửi
