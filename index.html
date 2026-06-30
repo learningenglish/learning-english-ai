@@ -5,7 +5,7 @@ box-shadow:0 8px 32px rgba(0,0,0,.2);overflow:hidden;min-width:220px;
 animation:tooltipIn .15s ease
 "><div style="padding:8px 14px 6px;font-size:11px;color:#e74c3c;font-weight:bold;text-transform:uppercase;letter-spacing:.5px;border-bottom:1px solid #f5c6cb">
 ⚠ Không thể hoàn tác
-</div><div class="del-item" id="di_hist"    onclick="confirmDelete('hist',this)">📜 Xóa toàn bộ lịch sử</div><div class="del-item" id="di_viewed"  onclick="confirmDelete('viewed',this)">📖 Xóa toàn bộ từ đã tra</div><div class="del-item" id="di_saved"   onclick="confirmDelete('saved',this)">⭐ Xóa toàn bộ từ đã lưu</div><div class="del-item" id="di_sent"    onclick="confirmDelete('sent',this)">💬 Xóa toàn bộ câu đã lưu</div><div style="border-top:1px solid #f5c6cb;margin:4px 0"></div><div class="del-item del-all" id="di_all" onclick="confirmDelete('all',this)">🗑 Xóa TẤT CẢ dữ liệu</div></div><!-- TOP BAR --><div class="top-bar"><div class="top-bar-title">🇬🇧 Learning English AI V11</div><button class="top-bar-btn" onclick="showLogin()">Đăng nhập</button><div class="top-bar-sep"></div><button class="top-bar-btn" onclick="showRegister()">Đăng ký</button><div class="top-bar-sep"></div><div class="stats-wrap"><div class="stats-dropdown" id="statsDropdown"><div class="score-big"><div class="score-num" id="sp-score">0</div><div class="score-sub">Điểm học tập</div><div style="font-size:11px;color:#aaa;margin-top:3px" id="sp-breakdown">-</div></div><div class="stat-row"><span class="stat-label">⭐ Từ đã lưu</span><span class="stat-value" id="sp-saved">0</span></div><div class="stat-row"><span class="stat-label">📖 Từ đã tra</span><span class="stat-value" id="sp-viewed">0</span></div><div class="stat-row"><span class="stat-label">🔊 Câu đã nghe</span><span class="stat-value" id="sp-sentences">0</span></div><div class="stat-row"><span class="stat-label">⏱ Thời lượng nghe</span><span class="stat-value" id="sp-duration">00m 00s</span></div><div class="stat-row"><span class="stat-label">🎓 Trình độ CEFR</span><span class="stat-value" id="sp-cefr">—</span></div><div style="margin:8px 0 4px" id="sp-cefr-dist"></div><div class="stat-row"><span class="stat-label">🔥 Chuỗi ngày học</span><span class="stat-value" id="sp-streak">0 ngày</span></div><div class="stat-row"><span class="stat-label">💳 Credit</span><span class="stat-value" id="sp-credit-label">0/30</span></div><button onclick="resetStats()" style="width:100%;margin-top:10px;background:#dc3545;border-radius:8px;padding:7px;border:none;color:#fff;cursor:pointer;font-size:13px">🗑 Reset điểm</button><!-- Exam stats --><div style="margin-top:12px;border-top:1px solid #eaf4fb;padding-top:10px"><div style="font-size:11px;color:#888;font-weight:700;margin-bottom:6px;text-transform:uppercase;letter-spacing:.3px">📝 Bài kiểm tra</div><div class="stat-row"><span class="stat-label">✅ Đã hoàn thành</span><span class="stat-value" id="sp-exam-done">0</span></div><div class="stat-row"><span class="stat-label">⏳ Chưa hoàn thành</span><span class="stat-value" id="sp-exam-pending">0</span></div><div class="stat-row"><span class="stat-label">🏆 Điểm cao nhất</span><span class="stat-value" id="sp-exam-best">—</span></div><button onclick="openTest()" style="width:100%;margin-top:6px;background:#1a3c6e;border-radius:6px;padding:6px;border:none;color:#fff;cursor:pointer;font-size:12px">📝 Vào kho bài kiểm tra</button></div><div style="margin-top:12px;border-top:1px solid #eaf4fb;padding-top:10px"><div style="font-size:11px;color:#888;margin-bottom:5px">🔑 OpenAI API Key</div><div style="display:flex;gap:6px"><input type="password" id="apiKeyInput" placeholder="sk-..." style="flex:1;padding:6px 8px;border:1.5px solid #aed6f1;border-radius:8px;font-size:12px;outline:none;min-width:0"><button onclick="saveApiKey()" style="background:#1a5f8a;border:none;color:#fff;border-radius:8px;padding:6px 10px;cursor:pointer;font-size:12px;white-space:nowrap">Lưu</button></div><div id="apiKeyStatus" style="font-size:11px;margin-top:4px;color:#888"></div></div></div></div></div><div class="layout"><!-- LEFT SIDEBAR --><div class="sidebar"><button class="sb-btn" onclick="toggleStatsDropdown()" id="sbScore" title="Bảng điểm" style="flex-direction:column;gap:1px;height:44px"><span style="font-size:16px">📊</span><span id="sbScoreNum" style="font-size:9px;color:#ffd700;font-weight:700;line-height:1.2">0</span></button><button class="sb-btn" onclick="togglePanel('pHistory')" id="sbHistory" title="Thư viện học tập" style="position:relative">
+</div><div class="del-item" id="di_hist"    onclick="confirmDelete('hist',this)">📜 Xóa toàn bộ lịch sử</div><div class="del-item" id="di_viewed"  onclick="confirmDelete('viewed',this)">📖 Xóa toàn bộ từ đã tra</div><div class="del-item" id="di_saved"   onclick="confirmDelete('saved',this)">⭐ Xóa toàn bộ từ đã lưu</div><div class="del-item" id="di_sent"    onclick="confirmDelete('sent',this)">💬 Xóa toàn bộ câu đã lưu</div><div style="border-top:1px solid #f5c6cb;margin:4px 0"></div><div class="del-item del-all" id="di_all" onclick="confirmDelete('all',this)">🗑 Xóa TẤT CẢ dữ liệu</div></div><!-- TOP BAR --><div class="top-bar"><div class="top-bar-title">🇬🇧 Learning English AI V11</div><button class="top-bar-btn" onclick="showLogin()">Đăng nhập</button><div class="top-bar-sep"></div><button class="top-bar-btn" onclick="showRegister()">Đăng ký</button><div class="top-bar-sep"></div><div class="stats-wrap"><div class="stats-dropdown" id="statsDropdown"><div class="score-big"><div class="score-num" id="sp-score">0</div><div class="score-sub">Điểm học tập</div><div style="font-size:11px;color:#aaa;margin-top:3px" id="sp-breakdown">-</div></div><div class="stat-row"><span class="stat-label">⭐ Từ đã lưu</span><span class="stat-value" id="sp-saved">0</span></div><div class="stat-row"><span class="stat-label">📖 Từ đã tra</span><span class="stat-value" id="sp-viewed">0</span></div><div class="stat-row"><span class="stat-label">🔊 Câu đã nghe</span><span class="stat-value" id="sp-sentences">0</span></div><div class="stat-row"><span class="stat-label">⏱ Thời lượng nghe</span><span class="stat-value" id="sp-duration">00m 00s</span></div><div class="stat-row"><span class="stat-label">🎓 Trình độ CEFR</span><span class="stat-value" id="sp-cefr">—</span></div><div style="margin:8px 0 4px" id="sp-cefr-dist"></div><div class="stat-row"><span class="stat-label">🔥 Chuỗi ngày học</span><span class="stat-value" id="sp-streak">0 ngày</span></div><div class="stat-row"><span class="stat-label">💳 Credit</span><span class="stat-value" id="sp-credit-label">0/30</span></div><button onclick="resetStats()" style="width:100%;margin-top:10px;background:#dc3545;border-radius:8px;padding:7px;border:none;color:#fff;cursor:pointer;font-size:13px">🗑 Reset điểm</button><!-- Exam stats --><div style="margin-top:12px;border-top:1px solid #eaf4fb;padding-top:10px"><div style="font-size:11px;color:#888;font-weight:700;margin-bottom:6px;text-transform:uppercase;letter-spacing:.3px">📝 Bài kiểm tra</div><div class="stat-row"><span class="stat-label">✅ Đã hoàn thành</span><span class="stat-value" id="sp-exam-done">0</span></div><div class="stat-row"><span class="stat-label">⏳ Chưa hoàn thành</span><span class="stat-value" id="sp-exam-pending">0</span></div><div class="stat-row"><span class="stat-label">🏆 Điểm cao nhất</span><span class="stat-value" id="sp-exam-best">—</span></div><button onclick="openTest()" style="width:100%;margin-top:6px;background:#1a3c6e;border-radius:6px;padding:6px;border:none;color:#fff;cursor:pointer;font-size:12px">📝 Vào kho bài kiểm tra</button></div></div></div></div><div class="layout"><!-- LEFT SIDEBAR --><div class="sidebar"><button class="sb-btn" onclick="toggleStatsDropdown()" id="sbScore" title="Bảng điểm" style="flex-direction:column;gap:1px;height:44px"><span style="font-size:16px">📊</span><span id="sbScoreNum" style="font-size:9px;color:#ffd700;font-weight:700;line-height:1.2">0</span></button><button class="sb-btn" onclick="togglePanel('pHistory')" id="sbHistory" title="Thư viện học tập" style="position:relative">
 📜
 <span class="badge" id="histBadge" style="display:none">0</span></button><button class="sb-btn" onclick="togglePanel('pViewed')" id="sbViewed" title="Từ đã tra" style="position:relative">
 📖
@@ -14,32 +14,45 @@ animation:tooltipIn .15s ease
 <span class="badge" id="savedBadge" style="display:none">0</span></button><button class="sb-btn" onclick="togglePanel('pSavedSent')" id="sbSavedSent" title="Câu đã lưu" style="position:relative">
 💬
 <span class="badge" id="savedSentBadge" style="display:none">0</span></button><button class="sb-btn" onclick="openTest()" id="sbTest" title="Bài test">📝</button><button class="sb-btn" onclick="toggleDeleteDropdown(event)" title="Xóa dữ liệu" id="deleteBtnMain" style="color:#e74c3c">🗑</button></div><!-- MAIN --><div class="main"><div class="input-card"><textarea id="txt" placeholder="Nhập tiếng Anh hoặc đoạn hội thoại...&#10;Ví dụ:&#10;Elsa: Excuse me, are you American?&#10;Tim: No. I'm from Vietnam."></textarea><div class="toolbar"><!-- Mode selector --><div class="mode-wrap"><button class="mode-btn" onclick="toggleModeDropdown()"><div class="mode-btn-left"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#1a5f8a" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg><span id="modeLbl">A2</span></div><div class="mode-sep"></div><div class="mode-btn-right"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#5dade2" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="18 15 12 9 6 15"/><polyline points="6 9 12 15 18 9"/></svg></div></button><div class="mode-dropdown" id="modeDropdown"><button class="mode-item active" id="modeA1new" onclick="selectMode('A1')">🌱 A1 <span style="color:#888;font-size:12px">— Từng từ cơ bản</span></button><button class="mode-item" id="modeA1" onclick="selectMode('A1-A2')">📗 A2 <span style="color:#888;font-size:12px">— Cụm từ cơ bản</span></button><button class="mode-item" id="modeA2" onclick="selectMode('B1')">📙 B1 <span style="color:#888;font-size:12px">— Pre-Intermediate</span></button><button class="mode-item" id="modeB12" onclick="selectMode('B2')">📘 B2 <span style="color:#888;font-size:12px">— Intermediate</span></button></div></div><!-- Run --><button class="run-btn" onclick="analyze()" title="Phân tích"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#1a5f8a" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg></button></div><div id="status" style="font-size:13px;color:#2e86c1;min-height:16px;margin-top:6px"></div><!-- Audio bar (shows after analysis) --><div class="audio-bar" id="audioBar"><button class="ab-btn" onclick="restartAudio()" title="Về đầu">⏮</button><button class="ab-btn main-play" id="btnPlay" onclick="toggleListenAll()" title="Play/Pause">▶</button><div class="ab-progress" onclick="seekAudio(event)" title="Tiến trình"><div class="ab-progress-fill" id="abProgress"></div></div><span class="ab-time" id="abTime">0/0</span><button class="ab-btn" id="btnRepeat" onclick="toggleRepeat()" title="Lặp lại">🔁</button><div class="ab-vol-wrap"><span class="ab-vol-icon" onclick="toggleMute()" id="volIcon">🔊</span><input type="range" class="ab-vol" id="volSlider" min="0" max="100" value="80"
-oninput="setVolume(this.value)" title="Âm lượng"></div><div class="ab-speed-wrap"><button class="ab-speed-btn" id="speedBtn" onclick="toggleSpeedDropdown()" title="Tốc độ">1x</button><div class="ab-speed-dd" id="speedDropdown"><div onclick="setSpeed(0.8)">0.8x</div><div onclick="setSpeed(1)" class="active">1x</div><div onclick="setSpeed(1.25)">1.25x</div><div onclick="setSpeed(1.5)">1.5x</div><div onclick="setSpeed(2)">2x</div></div></div></div></div><div id="out"></div></div></div><script>const API_KEY_PLACEHOLDER = "YOUR_OPENAI_API_KEY_HERE";
-let _apiKey = localStorage.getItem("openai_key_en8") || "YOUR_OPENAI_API_KEY_HERE";
-function getApiKey() { return _apiKey; }
-function saveApiKey() {
-  const inp = document.getElementById("apiKeyInput");
-  if (!inp) return;
-  const val = inp.value.trim();
-  if (!val.startsWith("sk-") && val !== "") {
-    document.getElementById("apiKeyStatus").textContent = "❌ Key phải bắt đầu bằng sk-";
-    document.getElementById("apiKeyStatus").style.color = "#dc3545";
-    return;
+oninput="setVolume(this.value)" title="Âm lượng"></div><div class="ab-speed-wrap"><button class="ab-speed-btn" id="speedBtn" onclick="toggleSpeedDropdown()" title="Tốc độ">1x</button><div class="ab-speed-dd" id="speedDropdown"><div onclick="setSpeed(0.8)">0.8x</div><div onclick="setSpeed(1)" class="active">1x</div><div onclick="setSpeed(1.25)">1.25x</div><div onclick="setSpeed(1.5)">1.5x</div><div onclick="setSpeed(2)">2x</div></div></div></div></div><div id="out"></div></div></div><script>
+// ====== KẾT NỐI CLOUDFLARE WORKER (thay cho việc gọi OpenAI trực tiếp + lưu API key) ======
+// Đổi URL này thành URL Worker thật của bạn sau khi deploy (lệnh `wrangler deploy` sẽ in ra).
+const WORKER_URL = "https://learning-english-ai.kimchinamvn.workers.dev/api/chat";
+
+// Phải GIỐNG HỆT giá trị bạn đặt bằng `wrangler secret put APP_SECRET`.
+// Đây không phải xác thực thật (frontend tĩnh thì vẫn đọc được qua DevTools nếu cố tình tìm),
+// chỉ chặn được bot/script quét URL ngẫu nhiên trên Internet.
+const APP_SECRET = "giá trị thật";
+
+/**
+ * Gọi 1 action trên Worker. Worker tự ráp prompt và gọi OpenAI — frontend chỉ gửi
+ * dữ liệu thô (câu, từ, level...), KHÔNG bao giờ thấy prompt hay API key thật.
+ * @param {string} action - tên action (xem danh sách trong worker.js: analyze_sentence, word_tip, ...)
+ * @param {object} data   - tham số cho action đó
+ * @returns {Promise<string|null>} nội dung trả lời (string), null nếu lỗi
+ */
+async function callWorker(action, data) {
+  try {
+    const r = await fetch(WORKER_URL, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "X-App-Secret": APP_SECRET,
+      },
+      body: JSON.stringify({ action, ...data }),
+    });
+    const result = await r.json();
+    if (!r.ok || result.error) {
+      console.error("Worker error:", result.error);
+      return null;
+    }
+    return result.content;
+  } catch (e) {
+    console.error("Network error calling worker:", e);
+    return null;
   }
-  _apiKey = val || API_KEY_PLACEHOLDER;
-  localStorage.setItem("openai_key_en8", _apiKey);
-  // Warn about file:// CORS issue
-  const isFileProtocol = location.protocol === "file:";
-  if(val && isFileProtocol) {
-    document.getElementById("apiKeyStatus").innerHTML = '✅ Đã lưu — <span style="color:#e67e22">⚠ Mở file trên server để API hoạt động (file:// bị chặn CORS)</span>';
-    document.getElementById("apiKeyStatus").style.color = "#28a745";
-  } else {
-    document.getElementById("apiKeyStatus").textContent = val ? "✅ Đã lưu!" : "✅ Đã xóa key";
-    document.getElementById("apiKeyStatus").style.color = "#28a745";
-  }
-  inp.value = "";
-  setTimeout(()=>{ const el=document.getElementById("apiKeyStatus"); if(el)el.textContent=""; }, 4000);
 }
+
 const MAX_CREDITS = 30;
 const txt = document.getElementById("txt");
 const out = document.getElementById("out");
@@ -1653,26 +1666,16 @@ async function b12TTAskAI(word, uid) {
   }
   box.style.display = "block";
   box.innerHTML = "⏳ ...";
-  const API_KEY3 = getApiKey();
   let tip = AI_WORD_TIPS[word] || null;
   // Get sentence context
   const si = parseInt((uid||"s0").replace("s",""))||0;
   const sentCtx = lastAnalyzedData[si]?.sentence || "";
-  if(!tip && API_KEY3 !== "YOUR_OPENAI_API_KEY_HERE") {
+  if(!tip) {
     try {
-      const r = await fetch("https://api.openai.com/v1/chat/completions",{
-        method:"POST",
-        headers:{"Content-Type":"application/json","Authorization":"Bearer "+API_KEY3},
-        body:JSON.stringify({
-          model:"gpt-4o-mini",
-          max_tokens:180,
-          messages:[{role:"user",content:`Explain the word/phrase "${word}" for a Vietnamese B1-B2 learner. Answer in Vietnamese, 2-3 lines. Focus on meaning in context, grammar form, usage tip.${sentCtx?` Context: "${sentCtx}"`:""}` }]
-        })
-      });
-      if(r.ok){ const d=await r.json(); tip=d?.choices?.[0]?.message?.content||null; }
+      tip = await callWorker("word_tip", { word, sentenceContext: sentCtx });
     } catch(e){}
   }
-  if(!tip) tip=`Từ "<b>${word}</b>". Nhập API key để nhận giải thích chi tiết.`;
+  if(!tip) tip=`Từ "<b>${word}</b>". Không thể lấy giải thích lúc này, thử lại sau.`;
   box.innerHTML = `<span style="font-size:11px;color:#5dade2">Còn ${AI_LIMIT-used-1} lần</span><br>${tip}`;
   incAIUsed();
   if (b12ActiveTooltip && b12ActiveWord) b12PositionTooltip(b12ActiveTooltip, b12ActiveWord);
@@ -2124,14 +2127,9 @@ function attachChunkEvents(uid) {
       if(aiBox.dataset.open==="1"){aiBox.remove();return;}
       aiBox.dataset.open="1";
       aiBox.innerHTML="⏳ ...";
-      const API_KEY=getApiKey();
-      if(!API_KEY||API_KEY==="YOUR_OPENAI_API_KEY_HERE"){aiBox.innerHTML="⚠ Chưa có API key";return;}
-      fetch("https://api.openai.com/v1/chat/completions",{method:"POST",headers:{"Content-Type":"application/json","Authorization":"Bearer "+API_KEY},body:JSON.stringify({model:"gpt-4o-mini",max_tokens:250,messages:[{role:"user",content:`Giải thích cụm từ "${phrase}" trong câu sau cho người học tiếng Anh trình độ A2-B1 người Việt.\n\nCâu: "${ctx}"\n\nTrả lời bằng tiếng Việt theo format (mỗi mục xuống hàng):\n📌 Nghĩa trong câu: [nghĩa cụ thể]\n📐 Cấu trúc: [cấu trúc ngữ pháp nếu có]\n💡 Lưu ý: [điều quan trọng cần nhớ]`}]})})
-        .then(r=>r.json()).then(d=>{
-        const text = d?.choices?.[0]?.message?.content||"—";
-        aiBox.innerHTML = `<div style="font-size:12px;line-height:1.8;color:#333">${text.replace(/\n/g,"<br>")}</div>`;
-      })
-        .catch(()=>{ aiBox.innerHTML="❌ Lỗi kết nối"; });
+      callWorker("phrase_explain", { phrase, context: ctx }).then(text=>{
+        aiBox.innerHTML = `<div style="font-size:12px;line-height:1.8;color:#333">${(text||"—").replace(/\n/g,"<br>")}</div>`;
+      }).catch(()=>{ aiBox.innerHTML="❌ Lỗi kết nối"; });
     };
   });
 }
@@ -2512,8 +2510,6 @@ closeTest();
 createExamWithAI(pool,domLevel,N);
 }
 async function createExamWithAI(pool,domLevel,N){
-const API_KEY=getApiKey();
-if(!API_KEY||API_KEY==="YOUR_OPENAI_API_KEY_HERE"){alert("Cần API key để tạo đề.");return;}
 const examSrc=document.querySelector("[data-src].active")?.dataset.src||"current";
 const isVocab=(examSrc==="current"||examSrc==="viewed"||examSrc==="saved");
 const isIELTS=!isVocab&&_examType==="ielts";
@@ -2528,16 +2524,24 @@ const sampleWords=pool.sort(()=>Math.random()-.5).slice(0,50);
 const sentences=[...new Set(pool.map(w=>w.sentence).filter(s=>s&&s.length>15))].slice(0,12);
 const wordList=sampleWords.slice(0,40).map(w=>`"${w.display}"(${w.meaning})${w.grammar?`[${w.grammar}]`:""}`).join(", ");
 const key="exam_"+Date.now();
-const callAPI=(prompt,tok=3200)=>fetch("https://api.openai.com/v1/chat/completions",{
-method:"POST",
-headers:{"Content-Type":"application/json","Authorization":"Bearer "+API_KEY},
-body:JSON.stringify({model:"gpt-4o",max_tokens:Math.max(tok,4000),
-response_format:{type:"json_object"},
-messages:[
-{role:"system",content:"You are an expert English exam creator. Return ONLY valid JSON. Never truncate output."},
-{role:"user",content:prompt}
-]})
-}).then(r=>r.json());
+// Gọi qua Worker (action generate_exam_legacy) — API key + model nằm ở server, frontend không thấy.
+const callAPI=async(prompt,tok=3200)=>{
+  const r=await fetch(WORKER_URL,{
+    method:"POST",
+    headers:{"Content-Type":"application/json","X-App-Secret":APP_SECRET},
+    body:JSON.stringify({
+      action:"generate_exam_legacy",
+      max_tokens:Math.max(tok,4000),
+      messages:[
+        {role:"system",content:"You are an expert English exam creator. Return ONLY valid JSON. Never truncate output."},
+        {role:"user",content:prompt}
+      ]
+    })
+  });
+  const result=await r.json();
+  // giữ nguyên shape cũ để parseResult() phía dưới không cần sửa
+  return {choices:[{message:{content: result.content || "{}"}}]};
+};
 const parseResult=(r,name)=>{
 const raw=r?.choices?.[0]?.message?.content||"{}";
 try{
@@ -2946,26 +2950,13 @@ async function askSentAI(uid, sentence, openBody) {
   }
   box.style.display="block";
   box.innerHTML="<span style='color:#5dade2;font-style:italic'>⏳ Đang phân tích câu...</span>";
-  const API_KEY = getApiKey();
   let tip = AI_SENT_TIPS[sentence] || null;
-  if(!tip && API_KEY !== "YOUR_OPENAI_API_KEY_HERE") {
+  if(!tip) {
     try {
-      const r = await fetch("https://api.openai.com/v1/chat/completions",{
-        method:"POST",
-        headers:{"Content-Type":"application/json","Authorization":"Bearer "+API_KEY},
-        body:JSON.stringify({
-          model:"gpt-4o-mini",
-          max_tokens:300,
-          messages:[{role:"user",content:`Explain this English sentence for a Vietnamese B1-B2 learner in Vietnamese. Be concise (3-5 lines max). Focus on: grammar structure, tense used, any special patterns. Sentence: "${sentence}"`}]
-        })
-      });
-      if(r.ok){
-        const d=await r.json();
-        tip=d?.choices?.[0]?.message?.content||null;
-      }
+      tip = await callWorker("sentence_tip", { sentence });
     } catch(e){}
   }
-  if(!tip) tip=`Câu này dùng cấu trúc tiếng Anh phổ biến ở trình độ B1-B2. Hãy nhập API key để nhận giải thích chi tiết.`;
+  if(!tip) tip=`Câu này dùng cấu trúc tiếng Anh phổ biến ở trình độ B1-B2. Không thể lấy giải thích lúc này, thử lại sau.`;
   const closeBtn=`<button onclick="document.getElementById('aiSent_${uid}').style.display='none'" style="float:right;background:none;border:none;cursor:pointer;color:#aaa;font-size:14px;padding:0">✕</button>`;
   box.innerHTML=`${closeBtn}<span style='font-size:11px;color:#aaa'>Còn ${AI_LIMIT-used2-1} lần</span><br>${tip}`;
   box.dataset.cached="1";
@@ -2995,31 +2986,13 @@ async function askWordAI(wid, word, sentence) {
   }
   box.style.display="block";
   box.innerHTML="<span style='color:#5dade2;font-style:italic'>⏳ Đang hỏi AI...</span>";
-  const API_KEY2 = getApiKey();
   let tip = AI_WORD_TIPS[word] || null;
-  if(!tip && API_KEY2 !== "YOUR_OPENAI_API_KEY_HERE") {
+  if(!tip) {
     try {
-      const r = await fetch("https://api.openai.com/v1/chat/completions",{
-        method:"POST",
-        headers:{"Content-Type":"application/json","Authorization":"Bearer "+API_KEY2},
-        body:JSON.stringify({
-          model:"gpt-4o-mini",
-          max_tokens:250,
-          messages:[{role:"user",content:`Giải thích từ/cụm từ "${word}" trong câu sau cho người học tiếng Anh trình độ A2-B1 người Việt.
-Câu: "${sentence}"
-Trả lời bằng tiếng Việt theo đúng format này (mỗi mục xuống hàng):
-📌 Nghĩa trong câu: [nghĩa cụ thể]
-📐 Cấu trúc: [cấu trúc ngữ pháp nếu có, ví dụ: to + V, be able to, V-ing,...]
-💡 Lưu ý: [điều quan trọng cần nhớ về từ/cụm này]`}]
-        })
-      });
-      if(r.ok){
-        const d=await r.json();
-        tip=d?.choices?.[0]?.message?.content||null;
-      }
+      tip = await callWorker("word_explain", { word, sentence });
     } catch(e){}
   }
-  if(!tip) tip=`Từ "<b>${word}</b>" trong câu này. Hãy nhập API key để nhận giải thích chi tiết.`;
+  if(!tip) tip=`Từ "<b>${word}</b>" trong câu này. Không thể lấy giải thích lúc này, thử lại sau.`;
   box.innerHTML=`<div style="font-size:12px;line-height:1.8;color:#333;border-left:3px solid #5dade2;padding-left:8px">${(tip||"").replace(/\n/g,"<br>")}</div><div style="text-align:right;font-size:10px;color:#aaa;margin-top:4px">Còn ${AI_LIMIT-used-1} lần</div>`;
   box.dataset.cached="1";
   incAIUsed();
@@ -3039,285 +3012,21 @@ function getMock(sentence,level){
   return{sentence:"(Bản dịch demo)",words:obj};
 }
 // ── AI call (real) ────────────────────────────────────────────
-async function callAI(prompt) {
-  const API_KEY = getApiKey();
-  if(!API_KEY||API_KEY==="YOUR_OPENAI_API_KEY_HERE"){
-    await new Promise(r=>setTimeout(r,200+Math.random()*300));
-    const m=prompt.match(/"([^"]+)"/);
-    return getMock(m?m[1]:"",currentLevel);
+async function callAI(sentence, level) {
+  const content = await callWorker("analyze_sentence", { sentence, level });
+  if (!content) {
+    // Worker lỗi/không phản hồi -> dùng dữ liệu demo để UI không bị treo
+    return getMock(sentence, level);
   }
-  const doFetch = async () => {
-    const r=await fetch("https://api.openai.com/v1/chat/completions",{
-      method:"POST",
-      headers:{"Content-Type":"application/json","Authorization":"Bearer "+API_KEY},
-      body:JSON.stringify({
-        model:"gpt-4o-mini",
-        max_tokens:4000,
-        response_format:{type:"json_object"},
-        messages:[
-          {role:"system", content:"You are a linguistic analyzer. Return complete valid JSON only. No markdown. No truncation."},
-          {role:"user", content:prompt}
-        ]
-      })
-    });
-    if(r.status===429){throw{retry:true, msg:"Rate limit"};}
-    if(!r.ok){const e=await r.json().catch(()=>({}));throw{retry:false,msg:`API lỗi ${r.status}: ${e?.error?.message||""}`};}
-    const d=await r.json();
-    if(d?.choices?.[0]?.finish_reason==="length") return{sentence:"⚠ Câu quá dài, thử chia nhỏ",words:{}};
-    const raw=d?.choices?.[0]?.message?.content||"{}";
-    try{ return JSON.parse(raw); }
-    catch{
-      const m2=raw.match(/\{[\s\S]*/);
-      if(m2){try{return JSON.parse(m2[0]);}catch{}}
-      return{sentence:"⚠ JSON lỗi",words:{}};
-    }
-  };
-  // Retry once on rate limit with 2s delay
-  try{ return await doFetch(); }
-  catch(e){
-    if(e?.retry){
-      await new Promise(r=>setTimeout(r,2000));
-      try{ return await doFetch(); }
-      catch(e2){ return{sentence:`❌ ${e2?.msg||"Mất kết nối"}`,words:{}}; }
-    }
-    return{sentence:`❌ ${e?.msg||"Mất kết nối"}`,words:{}};
+  try { return JSON.parse(content); }
+  catch {
+    const m2 = content.match(/\{[\s\S]*/);
+    if (m2) { try { return JSON.parse(m2[0]); } catch {} }
+    return { sentence: "⚠ JSON lỗi", words: {} };
   }
 }
 // ── Prompts ───────────────────────────────────────────────────
-function buildPrompt(sentence, level) {
-  if(level==="A1") return `Analyze this English sentence for A1 Vietnamese beginners: "${sentence}"
-Return ONLY valid JSON — no markdown. ALWAYS return the "words" object even for 1-word sentences.
-
-GROUPING RULES — group these into ONE key (they form a single meaning):
-1. TENSE CLUSTERS (highest priority — always group):
-   "is/am/are going to" → one key "is going to" = "sẽ"
-   "was/were going to" → one key "was going to" = "định sẽ"
-   "is/am/are V-ing" → one key e.g. "is visiting" = "đang thăm"
-   "was/were V-ing" → one key e.g. "was eating" = "đang ăn"
-   "have/has V3" → one key e.g. "have eaten" = "đã ăn"
-   "will have V3" → one key = "sẽ đã"
-   "will be V-ing" → one key = "sẽ đang"
-   "had V3" → one key e.g. "had gone" = "đã đi"
-   "will + verb" → one key e.g. "will have" = "sẽ có"
-   "used to + verb" → one key = "đã từng"
-2. MODAL CLUSTERS: "can play", "should go", "must be", "could have", "would like" → one key
-3. NEGATIVES: "do not/don't", "does not/doesn't", "did not/didn't", "will not/won't", "cannot/can't", "is not/isn't", "are not/aren't" → one key
-4. CONTRACTIONS: "I'm", "it's", "you're", "we'll", "I've", "don't", "can't" → one key exactly as written
-5. PHRASAL VERBS: "look at", "go to", "come back", "pick up" → one key
-6. FIXED PHRASES: "a lot of", "there is", "there are", "would like", "how are you" → one key
-
-After grouping the above, remaining individual words get their own key.
-
-EXAMPLES:
-Input: "A friend is going to visit me."
-Output: {"sentence":"Một người bạn sẽ đến thăm tôi.","words":{"A":{"meaning":"một","lemma":null,"level":"A1","type":"article","grammar":null,"irregular":null,"example":"A cat sat on the mat."},"friend":{"meaning":"người bạn","lemma":null,"level":"A1","type":"noun","grammar":null,"irregular":null,"example":"She is my best friend."},"is going to":{"meaning":"sẽ","lemma":"go","level":"A1","type":"phrase","grammar":"be going to = future plan","irregular":null,"example":"He is going to visit us tomorrow."},"visit":{"meaning":"thăm","lemma":null,"level":"A1","type":"verb","grammar":"base form","irregular":null,"example":"We visit grandma every Sunday."},"me":{"meaning":"tôi","lemma":null,"level":"A1","type":"pronoun","grammar":null,"irregular":null,"example":"She called me."}}}
-
-Input: "I think we will have dinner together."
-Output: {"sentence":"Tôi nghĩ chúng ta sẽ ăn tối cùng nhau.","words":{"I":{"meaning":"tôi","lemma":null,"level":"A1","type":"pronoun","grammar":null,"irregular":null,"example":"I am a student."},"think":{"meaning":"nghĩ","lemma":null,"level":"A1","type":"verb","grammar":"present simple","irregular":null,"example":"I think it is correct."},"we":{"meaning":"chúng ta","lemma":null,"level":"A1","type":"pronoun","grammar":null,"irregular":null,"example":"We go to school."},"will have":{"meaning":"sẽ có","lemma":"have","level":"A1","type":"phrase","grammar":"will + verb (future)","irregular":null,"example":"We will have a party tomorrow."},"dinner":{"meaning":"bữa tối","lemma":null,"level":"A1","type":"noun","grammar":null,"irregular":null,"example":"Dinner is at 7pm."},"together":{"meaning":"cùng nhau","lemma":null,"level":"A1","type":"adverb","grammar":null,"irregular":null,"example":"Let us eat together."}}}
-
-Input: "It's Friday!"
-Output: {"sentence":"Hôm nay là thứ Sáu!","words":{"It's":{"meaning":"đó là/hôm nay là","lemma":"be","level":"A1","type":"auxiliary","grammar":"it+is contraction","irregular":null,"example":"It's a beautiful day."},"Friday":{"meaning":"thứ Sáu","lemma":null,"level":"A1","type":"noun","grammar":null,"irregular":null,"example":"Friday is the last day of the week."}}}
-
-Return JSON:
-{"sentence":"Vietnamese translation","words":{"KEY":{"meaning":"Vietnamese 1-4 words (REQUIRED, never empty)","lemma":"base form or null","level":"A1|A2","type":"noun|verb|adjective|adverb|pronoun|preposition|conjunction|article|auxiliary|phrase|interjection","grammar":"tense/structure note or null","irregular":"V2→V3 for irregular verbs or null","example":"English example sentence (REQUIRED, never empty)"}}}
-
-STRICT RULES:
-- Keys for tense clusters use the EXACT text from sentence: "is going to", "will have", "has eaten"
-- NEVER use punctuation (.,?!;:) as a key
-- NEVER use empty key ""
-- NEVER duplicate a key
-- "meaning": real Vietnamese, never "", never null, never the English word itself
-- "example": real English sentence, never "", never null
-- Cover EVERY word — either in a group key or individually
-- do/does/did in questions → meaning:"(trợ từ hỏi)"
-- "level": A1 for most basic, A2 for harder words`;
-
-  if(level==="A1-A2") return `Analyze this English sentence for Vietnamese A2 learners: "${sentence}"
-Return ONLY valid JSON — no markdown.
-
-GROUPING RULES — group words into MEANINGFUL PHRASES (2-5 words), NOT individual words:
-1. VERB GROUPS: subject+verb together — "I am", "We used to live", "she doesn't like", "they went"
-2. TENSE/ASPECT: full verb phrase — "used to live", "have been", "is going to", "don't know", "couldn't play"
-3. NOUN PHRASES: article+adj+noun — "a big city", "the north of Italy", "the children"
-4. PREPOSITIONAL PHRASES: prep+noun — "in Turin", "at school", "on Monday", "to the museum"
-5. FIXED EXPRESSIONS: "good morning", "nice to meet you", "a lot of", "there is/are", "lots of people"
-6. PROPER NOUNS: consecutive caps = one entry — "New York", "United Kingdom"
-Only use single-word entries when a word truly stands alone.
-KEEP CHUNKS SHORT (max 4 words). Split long groups sensibly.
-
-GOOD example for "Sometimes, we went to the museum":
-{"sentence":"Đôi khi, chúng tôi đã đến bảo tàng.","words":{"Sometimes":{"meaning":"đôi khi","lemma":"sometimes","level":"A2","type":"adverb","grammar":null,"example":"Sometimes I go for a walk."},"we went":{"meaning":"chúng tôi đã đi","lemma":"go","level":"A1","type":"verb","grammar":"past simple (V2)","example":"We went to the park."},"to the museum":{"meaning":"đến bảo tàng","lemma":null,"level":"A2","type":"phrase","grammar":"to + noun","example":"We went to the museum on Sunday."}}}
-
-Return JSON:
-{"sentence":"Vietnamese translation (REQUIRED, never empty, never null)","words":{"WORD OR PHRASE":{"meaning":"Vietnamese 1-5 words (REQUIRED, NEVER empty or null)","lemma":"base form or null","level":"A1|A2|B1|B2","type":"noun|verb|adj|adv|pronoun|prep|conj|article|aux|phrase","grammar":"structure note or null","example":"English example sentence (REQUIRED, NEVER empty or null)"}}}
-
-⚠️ CRITICAL — every single entry MUST have:
-- "meaning": real Vietnamese translation, NEVER "", NEVER null, NEVER "meaning", NEVER a field name
-- "example": a real English sentence using the word/phrase, NEVER "", NEVER null
-
-VERB FORMS — mandatory lemma rules:
-- "went" → lemma:"go", grammar:"past simple (V2)"
-- "enjoyed" → lemma:"enjoy", grammar:"past simple (V2)"  
-- "couldn't" → lemma:"can", grammar:"modal negative"
-- "playing" → lemma:"play", grammar:"V-ing"
-- "been" → lemma:"be", grammar:"past participle (V3)"
-- "were" → lemma:"be", grammar:"past simple (V2)"
-Grammar for verbs MUST use: "past simple (V2)", "past participle (V3)", "V-ing", "present perfect", "past continuous", "passive", "modal + V", "base form"
-Cover EVERY word in the sentence. Never skip a word.`;
-
-  if(level==="B1") return `Analyze this English sentence for Vietnamese B1 learners: "${sentence}"
-Return ONLY valid JSON — no markdown.
-
-CHUNKING GOAL: Group words into MEANINGFUL CLAUSES and PHRASES (2-8 words each).
-Think grammatically — NOT by individual words:
-- Subject + verb group: "The U.S. carried out" / "Bahrain reported" / "Iranian forces hit"
-- Subordinate clause: "after Iranian forces hit" / "which the IRGC claimed" / "which targeted..."
-- Object + complement: "retaliatory strikes against Iran" / "a cargo vessel in the Strait"
-- Prepositional phrase: "on Friday" / "in the Gulf state" / "a day earlier"
-- Relative clause: "which the Iranian Revolutionary Guard Corps claimed"
-
-CHUNK SIZE GUIDE:
-- Minimum: 2 words (avoid single-word chunks unless truly standalone)
-- Maximum: 8-10 words for a clause
-- "I won't be able to join you at the workshop" → ["I won't be able to join you", "at the workshop"]
-- "after Iranian forces hit a cargo vessel" → ONE chunk (not split)
-- "which the Iranian Revolutionary Guard Corps claimed targeted" → ONE chunk
-
-MEANING RULES — critical for accurate Vietnamese:
-- "The U.S." / "the US" → "Hoa Kỳ" (NEVER "cái Mỹ")
-- "carried out" (phrasal verb) → "đã tiến hành" (NOT "mang ra")  
-- "on" + day of week → "vào": "on Friday"→"vào thứ Sáu", "on Saturday morning"→"vào sáng thứ Bảy"
-- "on" + surface → "trên": "on the table"→"trên bàn"
-- "claimed" in news = "tuyên bố" (NOT "yêu cầu")
-- token_meanings["The"/"the"] before country/org → "(mạo từ)" (NEVER "cái")
-- token_meanings["on"] before weekday → "vào" (NEVER "trên")
-
-RETURN FORMAT:
-{"sentence":"Vietnamese translation","chunks":[{"text":"ENGLISH chunk","meaning":"Vietnamese (1-5 words)","grammar":"grammar label or null","tokens":["word1","word2"],"token_meanings":{"word1":"nghĩa","word2":"nghĩa"}}],"words":{"each_word":{"meaning":"Vietnamese","lemma":"base form","level":"A1|A2|B1|B2|C1|C2","type":"noun|verb|adjective|adverb|pronoun|preposition|conjunction|article|auxiliary|phrasal verb","grammar":"tense/form or null","irregular":"V1→V2→V3 or empty"}}}
-
-STRICT RULES:
-- "text" = ENGLISH only, never Vietnamese
-- Every word in "${sentence}" must appear in exactly one chunk's tokens[]
-- token_meanings must cover ALL tokens in the chunk
-- token_meanings["The"] before proper noun = "(mạo từ)"
-- token_meanings["on"] before Mon/Tue/Wed/Thu/Fri/Sat/Sun = "vào"
-- VERB FORMS: "went"→lemma:"go",grammar:"past simple (V2)"; "carried out"→lemma:"carry out",grammar:"past simple (V2)",type:"phrasal verb"
-- grammar labels: "past simple (V2)" / "present perfect" / "passive (be+V3)" / "relative clause" / "subordinate clause" / "prepositional phrase" / "noun phrase" / "phrasal verb"
-`;
-  return `You are a precise English grammar analyzer for Vietnamese B1-B2 learners.
-Analyze the sentence: "${sentence}"
-
-STEP 1 — IDENTIFY all grammatical units in order:
-A) VERB GROUPS (highest priority — identify FIRST before anything else):
-   - Full tense cluster: "have been working" / "was fired" / "will be announced" / "had left" / "is going to" / "were being told"
-   - Modal + verb: "could have done" / "would be" / "might fall" / "should have been"
-   - Phrasal verb (verb + particle): "carried out" / "set up" / "give up" / "call off" / "turn down" / "look forward to" / "result in" / "depend on" / "come up with" / "put forward" / "broke out" / "taken over"
-   - RULE: Once you identify a phrasal verb, it becomes ONE entry — NEVER split verb from particle
-   - RULE: Inflected forms stay together: "carried out" (NOT "carried" + "out"), "broke out" (NOT "broke" + "out")
-
-B) PROPER NOUNS — consecutive capitalized words OR known abbreviations:
-   - "the United States" / "the U.S." / "the US" → meaning: "Hoa Kỳ" / "nước Mỹ"
-   - "the United Kingdom" / "the UK" / "the U.K." → meaning: "Anh Quốc"
-   - "the United Nations" / "the UN" → meaning: "Liên Hợp Quốc"
-   - "the European Union" / "the EU" → meaning: "Liên minh châu Âu"
-   - "the Iranian Revolutionary Guard Corps" → one entry
-   - "the Gulf state" / "the Strait of Hormuz" → one entry
-   - RULE: "The" before a proper noun is NOT translated as "cái" — use "(mạo từ)" in token_meanings
-
-C) PREPOSITIONAL PHRASES — prep + noun phrase:
-   - TIME prepositions — CRITICAL context rules:
-     * "on" + day/date = "vào": "on Friday"→"vào thứ Sáu", "on Saturday morning"→"vào sáng thứ Bảy", "on Sunday"→"vào Chủ nhật"
-     * "on" + surface = "trên": "on the table"→"trên bàn", "on the ground"→"dưới đất"
-     * "in" + month/year/period = "vào": "in May"→"vào tháng Năm", "in 2024"→"năm 2024"
-     * "at" + time = "lúc": "at 9am"→"lúc 9 giờ", "at night"→"vào ban đêm"
-     * "after" + event = "sau khi": "after Iranian forces hit"→"sau khi lực lượng Iran tấn công"
-     * "a day earlier" = "một ngày trước đó"
-   - Place: "in the Gulf" / "at the station" / "to the museum"
-
-D) NOUN PHRASES — determiner + adj + noun:
-   - "a cargo vessel" / "retaliatory strikes" / "Iranian drones" / "the Gulf state"
-
-E) FIXED EXPRESSIONS: "as well as" / "in spite of" / "a lot of" / "in order to" / "as a result"
-
-STEP 2 — GROUP into entries. Each entry = one meaningful unit from Step 1.
-STEP 3 — For each entry, provide ALL fields accurately.
-
-MEANING RULES (critical for Vietnamese accuracy):
-- Phrasal verbs: use natural Vietnamese equivalent of the WHOLE phrase:
-  "carried out" → "đã tiến hành" (NOT "mang ra ngoài")
-  "called off" → "đã hủy bỏ"
-  "set up" → "thành lập" / "thiết lập"
-  "broke out" → "bùng nổ"
-  "taken over" → "tiếp quản"
-- "The U.S." / "The US" → "Hoa Kỳ" or "nước Mỹ" (NEVER "cái Mỹ")
-- "on Friday" → "vào thứ Sáu" (NOT "trên thứ Sáu")
-- "on Saturday morning" → "vào sáng thứ Bảy" (NOT "trên sáng thứ Bảy")
-- "targeted" (phrasal context) → "đã nhắm mục tiêu" (NOT "nhắm" only)
-- "claimed" = "tuyên bố" (in news context, NOT "yêu cầu")
-- "hit" (a ship) = "tấn công" (NOT "đánh", NOT "trúng" unless projectile context)
-- Meaning = 1-4 Vietnamese words, precise in THIS context. No parentheses, no "hoặc".
-
-FEW-SHOT EXAMPLES:
-
-Input: "The U.S. carried out retaliatory strikes against Iran on Friday after Iranian forces hit a cargo vessel in the Strait of Hormuz a day earlier."
-Output:
-{
-  "sentence": "Mỹ đã tiến hành các cuộc không kích trả đũa nhằm vào Iran vào thứ Sáu sau khi lực lượng Iran tấn công một tàu hàng ở eo biển Hormuz một ngày trước đó.",
-  "words": {
-    "The U.S.": {"phrase":"The U.S.","meaning":"Hoa Kỳ","lemma":"","level":"B1","type":"noun","grammar":"proper noun (country)","token_meanings":{"The":"(mạo từ)","U.S.":"Hoa Kỳ"},"fixed_phrase":"","irregular":""},
-    "carried out": {"phrase":"carried out","meaning":"đã tiến hành","lemma":"carry out","level":"B1","type":"phrasal verb","grammar":"past simple (V2)","token_meanings":{"carried":"tiến hành (V2)","out":"(particle)"},"fixed_phrase":"carry out = thực hiện/tiến hành","irregular":"carry→carried→carried"},
-    "retaliatory strikes": {"phrase":"retaliatory strikes","meaning":"các cuộc không kích trả đũa","lemma":"","level":"B2","type":"noun","grammar":"noun phrase","token_meanings":{"retaliatory":"trả đũa","strikes":"cuộc không kích"},"fixed_phrase":"","irregular":""},
-    "against Iran": {"phrase":"against Iran","meaning":"nhằm vào Iran","lemma":"","level":"A2","type":"phrase","grammar":"prep + proper noun","token_meanings":{"against":"nhằm vào","Iran":"Iran"},"fixed_phrase":"","irregular":""},
-    "on Friday": {"phrase":"on Friday","meaning":"vào thứ Sáu","lemma":"","level":"A1","type":"phrase","grammar":"on + day of week = time","token_meanings":{"on":"vào","Friday":"thứ Sáu"},"fixed_phrase":"on + day = vào (NOT trên)","irregular":""},
-    "after Iranian forces hit": {"phrase":"after Iranian forces hit","meaning":"sau khi lực lượng Iran tấn công","lemma":"","level":"B1","type":"phrase","grammar":"after + clause (subordinator)","token_meanings":{"after":"sau khi","Iranian":"của Iran","forces":"lực lượng","hit":"tấn công (V2)"},"fixed_phrase":"","irregular":"hit→hit→hit"},
-    "a cargo vessel": {"phrase":"a cargo vessel","meaning":"một tàu hàng","lemma":"","level":"B2","type":"noun","grammar":"noun phrase","token_meanings":{"a":"một","cargo":"hàng hóa","vessel":"tàu"},"fixed_phrase":"","irregular":""},
-    "in the Strait of Hormuz": {"phrase":"in the Strait of Hormuz","meaning":"ở eo biển Hormuz","lemma":"","level":"B2","type":"phrase","grammar":"prep + proper noun","token_meanings":{"in":"ở","the":"(mạo từ)","Strait":"eo biển","of":"của","Hormuz":"Hormuz"},"fixed_phrase":"","irregular":""},
-    "a day earlier": {"phrase":"a day earlier","meaning":"một ngày trước đó","lemma":"","level":"B1","type":"phrase","grammar":"time expression","token_meanings":{"a":"một","day":"ngày","earlier":"trước đó"},"fixed_phrase":"","irregular":""}
-  }
-}
-
-Input: "On Saturday morning, Bahrain reported strikes by Iranian drones, which the Iranian Revolutionary Guard Corps claimed targeted a U.S. terrorist army in the Gulf state."
-Output:
-{
-  "sentence": "Vào sáng thứ Bảy, Bahrain báo cáo các cuộc không kích của máy bay không người lái Iran, mà Lực lượng Vệ binh Cách mạng Iran tuyên bố nhắm mục tiêu vào một quân đội khủng bố của Mỹ ở tiểu vương quốc Vùng Vịnh.",
-  "words": {
-    "On Saturday morning": {"phrase":"On Saturday morning","meaning":"vào sáng thứ Bảy","lemma":"","level":"A2","type":"phrase","grammar":"on + day + time = time adverb","token_meanings":{"On":"vào","Saturday":"thứ Bảy","morning":"sáng"},"fixed_phrase":"on + day = vào (NOT trên)","irregular":""},
-    "Bahrain reported": {"phrase":"Bahrain reported","meaning":"Bahrain báo cáo","lemma":"report","level":"B1","type":"verb","grammar":"past simple (V2)","token_meanings":{"Bahrain":"Bahrain","reported":"báo cáo (V2)"},"fixed_phrase":"","irregular":""},
-    "strikes by Iranian drones": {"phrase":"strikes by Iranian drones","meaning":"cuộc không kích bằng UAV Iran","lemma":"","level":"B2","type":"noun","grammar":"noun phrase + by-agent","token_meanings":{"strikes":"cuộc không kích","by":"bằng / của","Iranian":"Iran","drones":"máy bay không người lái"},"fixed_phrase":"","irregular":""},
-    "which": {"phrase":"which","meaning":"mà","lemma":"which","level":"A2","type":"pronoun","grammar":"relative pronoun","token_meanings":{},"fixed_phrase":"","irregular":""},
-    "the Iranian Revolutionary Guard Corps": {"phrase":"the Iranian Revolutionary Guard Corps","meaning":"Lực lượng Vệ binh Cách mạng Iran","lemma":"","level":"C1","type":"noun","grammar":"proper noun","token_meanings":{"the":"(mạo từ)","Iranian":"Iran","Revolutionary":"Cách mạng","Guard":"Vệ binh","Corps":"Lực lượng"},"fixed_phrase":"IRGC = Lực lượng Vệ binh Cách mạng Iran","irregular":""},
-    "claimed targeted": {"phrase":"claimed targeted","meaning":"tuyên bố đã nhắm mục tiêu","lemma":"claim","level":"B2","type":"verb","grammar":"past simple + V3 complement","token_meanings":{"claimed":"tuyên bố (V2)","targeted":"nhắm mục tiêu (V3)"},"fixed_phrase":"claim + V3 = tuyên bố đã làm gì","irregular":""},
-    "a U.S. terrorist army": {"phrase":"a U.S. terrorist army","meaning":"một quân đội khủng bố của Mỹ","lemma":"","level":"B2","type":"noun","grammar":"noun phrase","token_meanings":{"a":"một","U.S.":"Hoa Kỳ","terrorist":"khủng bố","army":"quân đội"},"fixed_phrase":"","irregular":""},
-    "in the Gulf state": {"phrase":"in the Gulf state","meaning":"ở tiểu vương quốc Vùng Vịnh","lemma":"","level":"B2","type":"phrase","grammar":"prep + noun phrase","token_meanings":{"in":"ở","the":"(mạo từ)","Gulf":"Vùng Vịnh","state":"tiểu vương quốc"},"fixed_phrase":"","irregular":""}
-  }
-}
-
-RETURN FORMAT — ONLY valid JSON, no markdown:
-{
-  "sentence": "Vietnamese translation of the full sentence",
-  "words": {
-    "EXACT_TEXT_FROM_SENTENCE": {
-      "phrase": "same as key",
-      "meaning": "1-4 word Vietnamese meaning (precise in context)",
-      "lemma": "base form of main verb or empty",
-      "level": "A1|A2|B1|B2|C1|C2",
-      "type": "noun|verb|adjective|adverb|pronoun|preposition|conjunction|article|auxiliary|phrasal verb|phrase",
-      "grammar": "specific label e.g. past simple (V2) / passive (be+V3) / prep + day / proper noun / etc.",
-      "token_meanings": {"each_token_in_phrase": "its Vietnamese meaning"},
-      "fixed_phrase": "usage note or empty",
-      "irregular": "V1→V2→V3 for irregular verbs or empty"
-    }
-  }
-}
-
-STRICT VALIDATION before returning:
-1. Every word in "${sentence}" must be a key OR appear in some token_meanings
-2. No phrasal verb split: if verb+particle are adjacent, they MUST be one key
-3. "on" before Mon/Tue/Wed/Thu/Fri/Sat/Sun → token_meanings["on"]="vào" (NEVER "trên")
-4. "The/the" before country/organization → token_meanings["The"]="(mạo từ)" (NEVER "cái")
-5. Phrasal verb meaning = whole-phrase Vietnamese, not literal translation of individual words
-`;
-}
+// buildPrompt() đã chuyển toàn bộ sang Worker (xem prompts.js) — không còn ở đây nữa.
 // ── Test system ──────────────────────────────────────────────
 async function analyze(){
   const text=txt.value.trim();
@@ -3461,7 +3170,7 @@ ${speaker?`<span class="sent-speaker">${speaker}:</span>`:""}
     }
     (async()=>{
       try{
-        let data=await callAI(buildPrompt(content,currentLevel));
+        let data=await callAI(content,currentLevel);
         if(runId!==currentRunId)return;
         // ── Post-process: fill missing meaning/example ──────────
         if(currentLevel==="A1-A2"&&data.words){
@@ -3535,14 +3244,7 @@ RULES: meaning in Vietnamese (1-5 words, never empty). example in English only (
   }
 }
 // ── Init ──────────────────────────────────────────────────────
-renderStats();updateBadges();updateAIBadge();
-// Load saved API key
-const _savedKey = localStorage.getItem("openai_key_en8");
-if(_savedKey) { _apiKey = _savedKey; }
-const _keyStat = document.getElementById("apiKeyStatus");
-if(_savedKey && _savedKey !== "YOUR_OPENAI_API_KEY_HERE"){
-  if(_keyStat) { _keyStat.textContent = "✅ API key đã lưu"; _keyStat.style.color="#28a745"; }
-}</script><!-- ══ EXAM FULLSCREEN OVERLAY ══════════════════════════════ --><div id="examOverlay" style="display:none;position:fixed;inset:0;z-index:3000;background:#f0f2f7;flex-direction:column"><!-- Exam header --><div id="examHd" style="background:#1a3c6e;color:#fff;padding:0 20px;height:52px;display:flex;align-items:center;justify-content:space-between;flex-shrink:0;box-shadow:0 2px 8px rgba(0,0,0,.3)"><div><div id="examHdTitle" style="font-size:14px;font-weight:700;letter-spacing:.3px">📝 Practice Test</div><div id="examHdSub" style="font-size:10px;color:#9dbee0;margin-top:1px"></div></div><div style="display:flex;align-items:center;gap:14px"><div><div style="font-size:8px;color:#9dbee0;text-align:center;margin-bottom:2px">TIẾN ĐỘ</div><div style="background:rgba(255,255,255,.2);border-radius:3px;height:5px;width:120px"><div id="examProgress" style="background:#ffd700;border-radius:3px;height:5px;width:0%;transition:width .3s"></div></div></div><div style="text-align:center"><div style="font-size:8px;color:#9dbee0;margin-bottom:2px">THỜI GIAN</div><div id="examTimer" style="background:rgba(255,255,255,.15);border-radius:4px;padding:4px 12px;font-size:15px;font-weight:700;font-family:monospace;letter-spacing:1px">60:00</div></div><button onclick="examSubmit()" style="background:#e67e22;border:none;color:#fff;border-radius:4px;padding:7px 14px;cursor:pointer;font-size:12px;font-weight:700">Nộp bài</button><button onclick="examClose()" style="background:rgba(255,255,255,.15);border:none;color:#fff;border-radius:4px;padding:7px 10px;cursor:pointer;font-size:13px" title="Đóng">✕</button></div></div><!-- Part tabs --><div id="examPartTabs" style="display:flex;background:#fff;border-bottom:2px solid #e0e4ec;flex-shrink:0"></div><!-- Exam content --><div id="examContent" style="flex:1;overflow-y:auto;padding:20px;max-width:860px;width:100%;margin:0 auto"></div><!-- Footer --><div style="background:#fff;border-top:2px solid #e0e4ec;padding:10px 20px;display:flex;gap:10px;justify-content:center;flex-shrink:0"><button onclick="examSubmit()" style="background:#1a3c6e;color:#fff;border:none;padding:10px 28px;border-radius:4px;font-size:13px;font-weight:700;cursor:pointer;letter-spacing:.3px">✅ Nộp bài</button><button onclick="examShowAnswers()" style="background:#e67e22;color:#fff;border:none;padding:10px 20px;border-radius:4px;font-size:13px;font-weight:700;cursor:pointer">💡 Xem đáp án</button></div><!-- Result modal --><div id="examResultModal" style="display:none;position:absolute;inset:0;background:rgba(10,20,50,.7);z-index:10;align-items:center;justify-content:center"><div style="background:#fff;border-radius:12px;padding:28px;max-width:460px;width:94%;text-align:center;box-shadow:0 8px 32px rgba(0,0,0,.3)"><div style="font-size:12px;color:#888;margin-bottom:4px" id="examResultLabel">KẾT QUẢ</div><div id="examResultBand" style="font-size:52px;font-weight:800;color:#1a3c6e;line-height:1.1;margin:6px 0"></div><div id="examResultScore" style="font-size:16px;color:#555;margin-bottom:10px"></div><div id="examResultBreakdown" style="display:grid;grid-template-columns:1fr 1fr;gap:8px;text-align:left;margin-bottom:16px"></div><div style="display:flex;gap:8px;justify-content:center"><button onclick="document.getElementById('examResultModal').style.display='none'" style="background:#555;color:#fff;border:none;padding:9px 20px;border-radius:4px;cursor:pointer;font-size:13px">Xem lại bài</button><button onclick="examClose()" style="background:#1a3c6e;color:#fff;border:none;padding:9px 20px;border-radius:4px;cursor:pointer;font-size:13px">Đóng bài thi</button></div></div></div></div><style>#examOverlay .esec{background:#fff;border-radius:6px;margin-bottom:14px;overflow:hidden;box-shadow:0 1px 4px rgba(0,0,0,.07)}#examOverlay .esec-hd{background:#2c5282;color:#fff;padding:7px 16px;font-size:10px;font-weight:700;letter-spacing:1.2px;text-transform:uppercase;display:flex;justify-content:space-between}#examOverlay .esec-body{padding:14px 18px}#examOverlay .einstr{font-size:12px;color:#555;font-style:italic;margin-bottom:12px;padding:6px 10px;background:#fffdf0;border-left:3px solid #e67e22;border-radius:0 3px 3px 0}#examOverlay .epassage{background:#f8f9fb;border:1px solid #d8dce8;border-radius:5px;padding:12px 14px;font-size:13.5px;line-height:1.85;color:#1a2540;margin-bottom:14px}#examOverlay .epassage-title{font-weight:700;font-size:13px;margin-bottom:6px;color:#1a3c6e}#examOverlay .eq{margin-bottom:16px;padding-bottom:14px;border-bottom:1px solid #f0f2f7}#examOverlay .eq:last-child{border-bottom:none;margin-bottom:0}#examOverlay .eq-row{display:flex;align-items:flex-start;gap:8px;margin-bottom:8px}#examOverlay .eq-num{min-width:22px;height:22px;background:#1a3c6e;color:#fff;border-radius:50%;font-size:10px;font-weight:700;display:flex;align-items:center;justify-content:center;flex-shrink:0;margin-top:2px}#examOverlay .eq-text{font-size:13.5px;color:#1a2540;line-height:1.6;flex:1}#examOverlay .eq-blank{display:inline-block;border-bottom:2px solid #2c5282;min-width:80px;margin:0 3px;color:#2c5282;font-weight:700}#examOverlay .eq-ref{font-style:italic;color:#555;font-size:13px;margin:3px 0 8px 30px;border-left:3px solid #d0d7e8;padding-left:8px;line-height:1.6}#examOverlay .eopts{display:grid;grid-template-columns:1fr 1fr;gap:5px;margin-left:30px}#examOverlay .eopt{display:flex;align-items:flex-start;gap:7px;padding:7px 10px;border:1.5px solid #d0d7e8;border-radius:5px;background:#fff;cursor:pointer;font-size:13px;color:#1a2540;line-height:1.4;text-align:left;width:100%;transition:all .12s}#examOverlay .eopt:hover:not(:disabled){border-color:#2c5282;background:#eef2fa}#examOverlay .eopt.sel{border-color:#2c5282;background:#eef2fa;font-weight:600}#examOverlay .eopt.ok{border-color:#1e7e34!important;background:#d4edda!important;color:#155724!important}#examOverlay .eopt.wrong{border-color:#c0392b!important;background:#fde8e8!important;color:#721c24!important}#examOverlay .eopt.reveal{border-color:#1e7e34!important;background:#f0fff4!important}#examOverlay .eletter{min-width:18px;height:18px;border:1.5px solid #999;border-radius:50%;font-size:10px;font-weight:700;display:flex;align-items:center;justify-content:center;flex-shrink:0;color:#666}#examOverlay .eopt.sel .eletter{border-color:#2c5282;background:#2c5282;color:#fff}#examOverlay .eopt.ok .eletter,.eopt.reveal .eletter{border-color:#1e7e34;background:#1e7e34;color:#fff}#examOverlay .eopt.wrong .eletter{border-color:#c0392b;background:#c0392b;color:#fff}#examOverlay .etfng{display:flex;gap:7px;margin-left:30px;flex-wrap:wrap}#examOverlay .etfbtn{padding:7px 16px;border:1.5px solid #d0d7e8;border-radius:5px;background:#fff;cursor:pointer;font-size:12px;font-weight:600;color:#1a2540;transition:all .12s;min-width:72px;text-align:center}#examOverlay .etfbtn:hover:not(:disabled){border-color:#2c5282;background:#eef2fa}#examOverlay .etfbtn.sel{background:#2c5282;border-color:#2c5282;color:#fff}#examOverlay .etfbtn.ok{background:#1e7e34;border-color:#1e7e34;color:#fff}#examOverlay .etfbtn.wrong{background:#c0392b;border-color:#c0392b;color:#fff}#examOverlay .etfbtn.reveal{background:#f0fff4;border-color:#1e7e34}#examOverlay .elisten{background:#2c5282;border:none;color:#fff;border-radius:4px;padding:7px 16px;cursor:pointer;font-size:12px;font-weight:700;margin-bottom:9px;display:inline-flex;align-items:center;gap:6px}#examOverlay .elisten:hover{background:#1a3c6e}#examOverlay .eexpl{display:none;margin:6px 0 0 30px;padding:7px 10px;background:#fffbf0;border-left:3px solid #e67e22;font-size:12px;color:#555;border-radius:0 3px 3px 0}#examOverlay .ptab{flex:1;padding:9px 4px;text-align:center;background:#fff;border:none;cursor:pointer;font-size:11px;font-weight:600;color:#888;border-right:1px solid #e0e4ec;transition:all .15s}#examOverlay .ptab:last-child{border-right:none}#examOverlay .ptab.act{background:#1a3c6e;color:#fff}#examOverlay .ptab small{display:block;font-size:9px;margin-top:1px;color:#28a745}#examOverlay .ptab.act small{color:#9dbee0}#examOverlay .wo-drop{min-height:38px;border:2px dashed #2c5282;border-radius:5px;padding:7px 10px;margin:0 0 7px 30px;display:flex;flex-wrap:wrap;gap:5px;cursor:pointer;background:#f8fbff}#examOverlay .wo-tag{background:#2c5282;color:#fff;padding:3px 9px;border-radius:3px;font-size:12px;font-weight:600;cursor:pointer}#examOverlay .wo-pool{display:flex;flex-wrap:wrap;gap:5px;margin-left:30px}#examOverlay .wo-btn{padding:4px 11px;border:1.5px solid #2c5282;border-radius:3px;background:#fff;cursor:pointer;font-size:12px;color:#2c5282;font-weight:600}#examOverlay .wo-btn:disabled{opacity:.35;cursor:default}@keyframes pulse{0%,100%{opacity:1}50%{opacity:.7}}</style><script>let _exam={data:null,answers:{},submitted:false,timer:null,timeLeft:0,currentPart:0,woState:{}};
+renderStats();updateBadges();updateAIBadge();</script><!-- ══ EXAM FULLSCREEN OVERLAY ══════════════════════════════ --><div id="examOverlay" style="display:none;position:fixed;inset:0;z-index:3000;background:#f0f2f7;flex-direction:column"><!-- Exam header --><div id="examHd" style="background:#1a3c6e;color:#fff;padding:0 20px;height:52px;display:flex;align-items:center;justify-content:space-between;flex-shrink:0;box-shadow:0 2px 8px rgba(0,0,0,.3)"><div><div id="examHdTitle" style="font-size:14px;font-weight:700;letter-spacing:.3px">📝 Practice Test</div><div id="examHdSub" style="font-size:10px;color:#9dbee0;margin-top:1px"></div></div><div style="display:flex;align-items:center;gap:14px"><div><div style="font-size:8px;color:#9dbee0;text-align:center;margin-bottom:2px">TIẾN ĐỘ</div><div style="background:rgba(255,255,255,.2);border-radius:3px;height:5px;width:120px"><div id="examProgress" style="background:#ffd700;border-radius:3px;height:5px;width:0%;transition:width .3s"></div></div></div><div style="text-align:center"><div style="font-size:8px;color:#9dbee0;margin-bottom:2px">THỜI GIAN</div><div id="examTimer" style="background:rgba(255,255,255,.15);border-radius:4px;padding:4px 12px;font-size:15px;font-weight:700;font-family:monospace;letter-spacing:1px">60:00</div></div><button onclick="examSubmit()" style="background:#e67e22;border:none;color:#fff;border-radius:4px;padding:7px 14px;cursor:pointer;font-size:12px;font-weight:700">Nộp bài</button><button onclick="examClose()" style="background:rgba(255,255,255,.15);border:none;color:#fff;border-radius:4px;padding:7px 10px;cursor:pointer;font-size:13px" title="Đóng">✕</button></div></div><!-- Part tabs --><div id="examPartTabs" style="display:flex;background:#fff;border-bottom:2px solid #e0e4ec;flex-shrink:0"></div><!-- Exam content --><div id="examContent" style="flex:1;overflow-y:auto;padding:20px;max-width:860px;width:100%;margin:0 auto"></div><!-- Footer --><div style="background:#fff;border-top:2px solid #e0e4ec;padding:10px 20px;display:flex;gap:10px;justify-content:center;flex-shrink:0"><button onclick="examSubmit()" style="background:#1a3c6e;color:#fff;border:none;padding:10px 28px;border-radius:4px;font-size:13px;font-weight:700;cursor:pointer;letter-spacing:.3px">✅ Nộp bài</button><button onclick="examShowAnswers()" style="background:#e67e22;color:#fff;border:none;padding:10px 20px;border-radius:4px;font-size:13px;font-weight:700;cursor:pointer">💡 Xem đáp án</button></div><!-- Result modal --><div id="examResultModal" style="display:none;position:absolute;inset:0;background:rgba(10,20,50,.7);z-index:10;align-items:center;justify-content:center"><div style="background:#fff;border-radius:12px;padding:28px;max-width:460px;width:94%;text-align:center;box-shadow:0 8px 32px rgba(0,0,0,.3)"><div style="font-size:12px;color:#888;margin-bottom:4px" id="examResultLabel">KẾT QUẢ</div><div id="examResultBand" style="font-size:52px;font-weight:800;color:#1a3c6e;line-height:1.1;margin:6px 0"></div><div id="examResultScore" style="font-size:16px;color:#555;margin-bottom:10px"></div><div id="examResultBreakdown" style="display:grid;grid-template-columns:1fr 1fr;gap:8px;text-align:left;margin-bottom:16px"></div><div style="display:flex;gap:8px;justify-content:center"><button onclick="document.getElementById('examResultModal').style.display='none'" style="background:#555;color:#fff;border:none;padding:9px 20px;border-radius:4px;cursor:pointer;font-size:13px">Xem lại bài</button><button onclick="examClose()" style="background:#1a3c6e;color:#fff;border:none;padding:9px 20px;border-radius:4px;cursor:pointer;font-size:13px">Đóng bài thi</button></div></div></div></div><style>#examOverlay .esec{background:#fff;border-radius:6px;margin-bottom:14px;overflow:hidden;box-shadow:0 1px 4px rgba(0,0,0,.07)}#examOverlay .esec-hd{background:#2c5282;color:#fff;padding:7px 16px;font-size:10px;font-weight:700;letter-spacing:1.2px;text-transform:uppercase;display:flex;justify-content:space-between}#examOverlay .esec-body{padding:14px 18px}#examOverlay .einstr{font-size:12px;color:#555;font-style:italic;margin-bottom:12px;padding:6px 10px;background:#fffdf0;border-left:3px solid #e67e22;border-radius:0 3px 3px 0}#examOverlay .epassage{background:#f8f9fb;border:1px solid #d8dce8;border-radius:5px;padding:12px 14px;font-size:13.5px;line-height:1.85;color:#1a2540;margin-bottom:14px}#examOverlay .epassage-title{font-weight:700;font-size:13px;margin-bottom:6px;color:#1a3c6e}#examOverlay .eq{margin-bottom:16px;padding-bottom:14px;border-bottom:1px solid #f0f2f7}#examOverlay .eq:last-child{border-bottom:none;margin-bottom:0}#examOverlay .eq-row{display:flex;align-items:flex-start;gap:8px;margin-bottom:8px}#examOverlay .eq-num{min-width:22px;height:22px;background:#1a3c6e;color:#fff;border-radius:50%;font-size:10px;font-weight:700;display:flex;align-items:center;justify-content:center;flex-shrink:0;margin-top:2px}#examOverlay .eq-text{font-size:13.5px;color:#1a2540;line-height:1.6;flex:1}#examOverlay .eq-blank{display:inline-block;border-bottom:2px solid #2c5282;min-width:80px;margin:0 3px;color:#2c5282;font-weight:700}#examOverlay .eq-ref{font-style:italic;color:#555;font-size:13px;margin:3px 0 8px 30px;border-left:3px solid #d0d7e8;padding-left:8px;line-height:1.6}#examOverlay .eopts{display:grid;grid-template-columns:1fr 1fr;gap:5px;margin-left:30px}#examOverlay .eopt{display:flex;align-items:flex-start;gap:7px;padding:7px 10px;border:1.5px solid #d0d7e8;border-radius:5px;background:#fff;cursor:pointer;font-size:13px;color:#1a2540;line-height:1.4;text-align:left;width:100%;transition:all .12s}#examOverlay .eopt:hover:not(:disabled){border-color:#2c5282;background:#eef2fa}#examOverlay .eopt.sel{border-color:#2c5282;background:#eef2fa;font-weight:600}#examOverlay .eopt.ok{border-color:#1e7e34!important;background:#d4edda!important;color:#155724!important}#examOverlay .eopt.wrong{border-color:#c0392b!important;background:#fde8e8!important;color:#721c24!important}#examOverlay .eopt.reveal{border-color:#1e7e34!important;background:#f0fff4!important}#examOverlay .eletter{min-width:18px;height:18px;border:1.5px solid #999;border-radius:50%;font-size:10px;font-weight:700;display:flex;align-items:center;justify-content:center;flex-shrink:0;color:#666}#examOverlay .eopt.sel .eletter{border-color:#2c5282;background:#2c5282;color:#fff}#examOverlay .eopt.ok .eletter,.eopt.reveal .eletter{border-color:#1e7e34;background:#1e7e34;color:#fff}#examOverlay .eopt.wrong .eletter{border-color:#c0392b;background:#c0392b;color:#fff}#examOverlay .etfng{display:flex;gap:7px;margin-left:30px;flex-wrap:wrap}#examOverlay .etfbtn{padding:7px 16px;border:1.5px solid #d0d7e8;border-radius:5px;background:#fff;cursor:pointer;font-size:12px;font-weight:600;color:#1a2540;transition:all .12s;min-width:72px;text-align:center}#examOverlay .etfbtn:hover:not(:disabled){border-color:#2c5282;background:#eef2fa}#examOverlay .etfbtn.sel{background:#2c5282;border-color:#2c5282;color:#fff}#examOverlay .etfbtn.ok{background:#1e7e34;border-color:#1e7e34;color:#fff}#examOverlay .etfbtn.wrong{background:#c0392b;border-color:#c0392b;color:#fff}#examOverlay .etfbtn.reveal{background:#f0fff4;border-color:#1e7e34}#examOverlay .elisten{background:#2c5282;border:none;color:#fff;border-radius:4px;padding:7px 16px;cursor:pointer;font-size:12px;font-weight:700;margin-bottom:9px;display:inline-flex;align-items:center;gap:6px}#examOverlay .elisten:hover{background:#1a3c6e}#examOverlay .eexpl{display:none;margin:6px 0 0 30px;padding:7px 10px;background:#fffbf0;border-left:3px solid #e67e22;font-size:12px;color:#555;border-radius:0 3px 3px 0}#examOverlay .ptab{flex:1;padding:9px 4px;text-align:center;background:#fff;border:none;cursor:pointer;font-size:11px;font-weight:600;color:#888;border-right:1px solid #e0e4ec;transition:all .15s}#examOverlay .ptab:last-child{border-right:none}#examOverlay .ptab.act{background:#1a3c6e;color:#fff}#examOverlay .ptab small{display:block;font-size:9px;margin-top:1px;color:#28a745}#examOverlay .ptab.act small{color:#9dbee0}#examOverlay .wo-drop{min-height:38px;border:2px dashed #2c5282;border-radius:5px;padding:7px 10px;margin:0 0 7px 30px;display:flex;flex-wrap:wrap;gap:5px;cursor:pointer;background:#f8fbff}#examOverlay .wo-tag{background:#2c5282;color:#fff;padding:3px 9px;border-radius:3px;font-size:12px;font-weight:600;cursor:pointer}#examOverlay .wo-pool{display:flex;flex-wrap:wrap;gap:5px;margin-left:30px}#examOverlay .wo-btn{padding:4px 11px;border:1.5px solid #2c5282;border-radius:3px;background:#fff;cursor:pointer;font-size:12px;color:#2c5282;font-weight:600}#examOverlay .wo-btn:disabled{opacity:.35;cursor:default}@keyframes pulse{0%,100%{opacity:1}50%{opacity:.7}}</style><script>let _exam={data:null,answers:{},submitted:false,timer:null,timeLeft:0,currentPart:0,woState:{}};
 function examOpen(key){
   const raw=localStorage.getItem("exam_"+key);
   if(!raw){alert("Không tìm thấy đề thi.");return;}
