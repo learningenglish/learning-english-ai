@@ -1,7 +1,7 @@
 
 // ====== KẾT NỐI CLOUDFLARE WORKER (thay cho việc gọi OpenAI trực tiếp + lưu API key) ======
 // Đổi URL này thành URL Worker thật của bạn sau khi deploy (lệnh `wrangler deploy` sẽ in ra).
-const WORKER_URL = "https://learning-english-ai.kimchinamvn.workers.dev/api/chat";
+const WORKER_URL = "https://learning-english-ai-vercel.vercel.app/api/chat";
 
 // Phải GIỐNG HỆT giá trị bạn đặt bằng `wrangler secret put APP_SECRET`.
 // Đây không phải xác thực thật (frontend tĩnh thì vẫn đọc được qua DevTools nếu cố tình tìm),
