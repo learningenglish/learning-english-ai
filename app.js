@@ -28,7 +28,7 @@ async function callWorker(action, data) {
     // tra đúng gói (Free/Basic/Pro) và trừ credit atomic trước khi gọi OpenAI. Mentor
     // không gắn header này nên hệ thống credit hiện có của Mentor không bị ảnh hưởng.
     if (currentStudent) {
-      const { data: { session } } = await supabase.auth.getSession();
+      const { data: { session } } = await sb.auth.getSession();
       if (session) headers["X-Student-Token"] = session.access_token;
     }
     const r = await fetch(WORKER_URL, {
@@ -56,13 +56,13 @@ async function callWorker(action, data) {
 const SUPABASE_URL = "https://ijwttrlxsmgaqxszphlp.supabase.co";
 const SUPABASE_ANON_KEY = "sb_publishable_D6NUatDu3ZapsLRwjKiBJw_Uh0ku3An";
 
-const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+const sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
 let currentMentor = null; // hồ sơ public.mentors của người đang đăng nhập, null nếu chưa đăng nhập
 let authMode = "login"; // "login" | "register", đang chọn trong authModal
 
 async function loadCurrentMentor(userId) {
-  const { data, error } = await supabase.from("mentors").select("*").eq("id", userId).single();
+  const { data, error } = await sb.from("mentors").select("*").eq("id", userId).single();
   if (error) { console.error("loadCurrentMentor error:", error); return null; }
   return data;
 }
@@ -73,7 +73,7 @@ async function loadCurrentMentor(userId) {
 // thật qua Supabase để tránh báo sai khi thực ra vẫn đang đăng nhập.
 async function ensureMentorSession() {
   if (currentMentor) return currentMentor;
-  const { data: { session } } = await supabase.auth.getSession();
+  const { data: { session } } = await sb.auth.getSession();
   if (session) currentMentor = await loadCurrentMentor(session.user.id);
   return currentMentor;
 }
@@ -83,7 +83,7 @@ let mentorFolders = [];
 
 async function loadMentorFolders() {
   if (!currentMentor) { mentorFolders = []; return; }
-  const { data, error } = await supabase.from("mentor_folders").select("*").eq("mentor_id", currentMentor.id);
+  const { data, error } = await sb.from("mentor_folders").select("*").eq("mentor_id", currentMentor.id);
   if (error) { console.error("loadMentorFolders error:", error); return; }
   mentorFolders = data || [];
 }
@@ -99,7 +99,7 @@ async function getOrCreateExamSubFolder(contentFolderId) {
   const existing = mentorFolders.find(f => f.parent_folder_id === contentFolderId && f.folder_type === "exam_sub");
   if (existing) return existing.id;
   const parent = mentorFolders.find(f => f.id === contentFolderId);
-  const { data, error } = await supabase.from("mentor_folders").insert({
+  const { data, error } = await sb.from("mentor_folders").insert({
     mentor_id: currentMentor.id, name: "Đề kiểm tra", level: parent ? parent.level : "A1-A2",
     folder_type: "exam_sub", is_auto: true, parent_folder_id: contentFolderId,
   }).select().single();
@@ -112,7 +112,7 @@ async function getOrCreateExamSubFolder(contentFolderId) {
 let mentorExams = [];
 async function loadMentorExams() {
   if (!currentMentor) { mentorExams = []; return; }
-  const { data, error } = await supabase.from("mentor_exams").select("*").eq("mentor_id", currentMentor.id).order("created_at", { ascending: false });
+  const { data, error } = await sb.from("mentor_exams").select("*").eq("mentor_id", currentMentor.id).order("created_at", { ascending: false });
   if (error) { console.error("loadMentorExams error:", error); return; }
   mentorExams = data || [];
 }
@@ -123,13 +123,13 @@ let mentorShares = []; // toàn bộ share hiện có của mentor, để biết
 
 async function loadMentorRoster() {
   if (!currentMentor) { mentorRoster = []; return; }
-  const { data, error } = await supabase.rpc("get_my_roster");
+  const { data, error } = await sb.rpc("get_my_roster");
   if (error) { console.error("loadMentorRoster error:", error); return; }
   mentorRoster = data || [];
 }
 async function loadMentorShares() {
   if (!currentMentor) { mentorShares = []; return; }
-  const { data, error } = await supabase.from("mentor_shares").select("*").eq("mentor_id", currentMentor.id);
+  const { data, error } = await sb.from("mentor_shares").select("*").eq("mentor_id", currentMentor.id);
   if (error) { console.error("loadMentorShares error:", error); return; }
   mentorShares = data || [];
 }
@@ -139,14 +139,14 @@ async function addToRoster() {
   const email = input.value.trim();
   if (!email) return;
   if (!(await ensureMentorSession())) { alert("Vui lòng đăng nhập."); return; }
-  const { data: found, error: rpcErr } = await supabase.rpc("find_student_by_email", { p_email: email });
+  const { data: found, error: rpcErr } = await sb.rpc("find_student_by_email", { p_email: email });
   if (rpcErr) { alert("Lỗi tra cứu: " + rpcErr.message); return; }
   if (!found || !found.length) {
     alert(`Email "${email}" chưa đăng ký tài khoản Student. Hãy nhắc học viên tạo tài khoản (chọn vai trò Student) trước.`);
     return;
   }
   const student = found[0];
-  const { error: insErr } = await supabase.from("mentor_students").insert({
+  const { error: insErr } = await sb.from("mentor_students").insert({
     mentor_id: currentMentor.id, student_id: student.id,
   });
   if (insErr) {
@@ -161,7 +161,7 @@ async function addToRoster() {
 
 async function removeFromRoster(studentId) {
   if (!confirm("Xoá học viên này khỏi danh sách? (không xoá tài khoản của họ)")) return;
-  const { error } = await supabase.from("mentor_students").delete().eq("mentor_id", currentMentor.id).eq("student_id", studentId);
+  const { error } = await sb.from("mentor_students").delete().eq("mentor_id", currentMentor.id).eq("student_id", studentId);
   if (error) { alert("Lỗi xoá: " + error.message); return; }
   mentorRoster = mentorRoster.filter(r => r.student_id !== studentId);
   loadRosterPanel();
@@ -197,10 +197,10 @@ async function openStudentProfile(studentId) {
 
   const sharedExamIds = mentorShares.filter(s => s.student_id === studentId && s.item_type === "exam").map(s => s.item_id);
   const [{ data: submissions }, { data: activityRows }, { count: viewedCount }, { data: listenRows }] = await Promise.all([
-    supabase.from("student_exam_submissions").select("*").eq("student_id", studentId),
-    supabase.rpc("get_roster_activity"),
-    supabase.from("user_viewed_words").select("*", { count: "exact", head: true }).eq("user_id", studentId),
-    supabase.from("user_listen_stats").select("listen_count,total_seconds").eq("user_id", studentId),
+    sb.from("student_exam_submissions").select("*").eq("student_id", studentId),
+    sb.rpc("get_roster_activity"),
+    sb.from("user_viewed_words").select("*", { count: "exact", head: true }).eq("user_id", studentId),
+    sb.from("user_listen_stats").select("listen_count,total_seconds").eq("user_id", studentId),
   ]);
 
   const activity = (activityRows || []).find(a => a.student_id === studentId);
@@ -260,7 +260,7 @@ async function openExamStats(examId) {
   document.getElementById("infoModal").classList.add("open");
 
   const sharedCount = mentorShares.filter(s => s.item_type === "exam" && s.item_id === examId).length;
-  const { data: submissions } = await supabase.from("student_exam_submissions").select("student_id,score").eq("exam_id", examId);
+  const { data: submissions } = await sb.from("student_exam_submissions").select("student_id,score").eq("exam_id", examId);
   const byStudent = {};
   (submissions || []).forEach(s => { if (s.score != null && (byStudent[s.student_id] == null || s.score > byStudent[s.student_id])) byStudent[s.student_id] = s.score; });
   const bestScores = Object.values(byStudent);
@@ -305,7 +305,7 @@ async function shareHistoryItem(time) {
   const h = JSON.parse(localStorage.getItem("history_en8") || "[]");
   const item = h.find(x => x.time === time);
   if (item && item.supabaseId) { openShareModal("history", item.supabaseId); return; }
-  const { data, error } = await supabase.from("mentor_history").select("id").eq("mentor_id", currentMentor.id).eq("client_id", String(time)).single();
+  const { data, error } = await sb.from("mentor_history").select("id").eq("mentor_id", currentMentor.id).eq("client_id", String(time)).single();
   if (error || !data) { alert("Nội dung này chưa đồng bộ xong lên máy chủ, vui lòng thử lại sau giây lát."); return; }
   openShareModal("history", data.id);
 }
@@ -313,13 +313,13 @@ async function toggleShare(studentId, on) {
   if (!_shareTarget) return;
   const { itemType, itemId } = _shareTarget;
   if (on) {
-    const { error } = await supabase.from("mentor_shares").insert({
+    const { error } = await sb.from("mentor_shares").insert({
       mentor_id: currentMentor.id, student_id: studentId, item_type: itemType, item_id: itemId,
     });
     if (error) { alert("Lỗi chia sẻ: " + error.message); return; }
     mentorShares.push({ mentor_id: currentMentor.id, student_id: studentId, item_type: itemType, item_id: itemId, viewed_at: null });
   } else {
-    const { error } = await supabase.from("mentor_shares").delete()
+    const { error } = await sb.from("mentor_shares").delete()
       .eq("mentor_id", currentMentor.id).eq("student_id", studentId).eq("item_type", itemType).eq("item_id", itemId);
     if (error) { alert("Lỗi bỏ chia sẻ: " + error.message); return; }
     mentorShares = mentorShares.filter(s => !(s.item_type===itemType && s.item_id===itemId && s.student_id===studentId));
@@ -333,10 +333,10 @@ let studentExamAttemptCounts = {}; // {exam_id: số lần đã nộp} — dùng
 async function loadStudentPortal() {
   if (!currentStudent) return;
   const [{ data: shares, error: shErr }, { data: historyRows, error: hErr }, { data: examRows, error: eErr }, { data: subRows, error: subErr }] = await Promise.all([
-    supabase.from("mentor_shares").select("*").eq("student_id", currentStudent.id),
-    supabase.from("mentor_history").select("*"),
-    supabase.from("mentor_exams").select("*"),
-    supabase.from("student_exam_submissions").select("exam_id").eq("student_id", currentStudent.id),
+    sb.from("mentor_shares").select("*").eq("student_id", currentStudent.id),
+    sb.from("mentor_history").select("*"),
+    sb.from("mentor_exams").select("*"),
+    sb.from("student_exam_submissions").select("exam_id").eq("student_id", currentStudent.id),
   ]);
   if (shErr) console.error("loadStudentPortal shares error:", shErr);
   if (hErr) console.error("loadStudentPortal history error:", hErr);
@@ -390,7 +390,7 @@ async function markShareViewed(itemType, itemId) {
   const share = studentShares.find(s => s.item_type === itemType && s.item_id === itemId);
   if (!share || share.viewed_at) return;
   const nowIso = new Date().toISOString();
-  const { error } = await supabase.from("mentor_shares").update({ viewed_at: nowIso })
+  const { error } = await sb.from("mentor_shares").update({ viewed_at: nowIso })
     .eq("mentor_id", share.mentor_id).eq("student_id", currentStudent.id).eq("item_type", itemType).eq("item_id", itemId);
   if (error) { console.error("markShareViewed error:", error); return; }
   share.viewed_at = nowIso;
@@ -409,7 +409,7 @@ async function openSharedExam(id) {
   markShareViewed("exam", id);
   let attemptNumber = 1;
   if (currentStudent) {
-    const { count, error } = await supabase.from("student_exam_submissions")
+    const { count, error } = await sb.from("student_exam_submissions")
       .select("id", { count: "exact", head: true })
       .eq("exam_id", id).eq("student_id", currentStudent.id);
     if (!error) attemptNumber = (count || 0) + 1;
@@ -428,7 +428,7 @@ let _lastSyncedCredits = null;
 async function syncCreditsToSupabase(credits) {
   if (!currentMentor || _lastSyncedCredits === credits) return;
   _lastSyncedCredits = credits;
-  const { error } = await supabase.from("mentors").update({ credits }).eq("id", currentMentor.id);
+  const { error } = await sb.from("mentors").update({ credits }).eq("id", currentMentor.id);
   if (error) console.error("syncCreditsToSupabase error:", error);
 }
 
@@ -437,7 +437,7 @@ async function syncHistoryUpsert(item) {
   const level = item.level || "A1-A2";
   const folderId = item.folderId || getDefaultFolderId(normalizeLibLevel(level));
   if (!folderId) { console.error("syncHistoryUpsert: không tìm thấy folder mặc định cho level", level); return; }
-  const { data, error } = await supabase.from("mentor_history").upsert({
+  const { data, error } = await sb.from("mentor_history").upsert({
     mentor_id: currentMentor.id,
     client_id: String(item.time),
     folder_id: folderId,
@@ -458,20 +458,20 @@ async function syncHistoryUpsert(item) {
 
 async function syncHistoryDelete(time) {
   if (!currentMentor) return;
-  const { error } = await supabase.from("mentor_history").delete()
+  const { error } = await sb.from("mentor_history").delete()
     .eq("mentor_id", currentMentor.id).eq("client_id", String(time));
   if (error) console.error("syncHistoryDelete error:", error);
 }
 
 async function syncHistoryClearAll() {
   if (!currentMentor) return;
-  const { error } = await supabase.from("mentor_history").delete().eq("mentor_id", currentMentor.id);
+  const { error } = await sb.from("mentor_history").delete().eq("mentor_id", currentMentor.id);
   if (error) console.error("syncHistoryClearAll error:", error);
 }
 
 async function syncSavedWordUpsert(word) {
   if (!currentMentor || !word) return;
-  const { error } = await supabase.from("mentor_saved_words").upsert({
+  const { error } = await sb.from("mentor_saved_words").upsert({
     mentor_id: currentMentor.id,
     word_key: word.key,
     lemma: word.lemma || "",
@@ -483,14 +483,14 @@ async function syncSavedWordUpsert(word) {
 
 async function syncSavedWordDelete(wordKey) {
   if (!currentMentor) return;
-  const { error } = await supabase.from("mentor_saved_words").delete()
+  const { error } = await sb.from("mentor_saved_words").delete()
     .eq("mentor_id", currentMentor.id).eq("word_key", wordKey);
   if (error) console.error("syncSavedWordDelete error:", error);
 }
 
 async function syncSavedWordsClearAll() {
   if (!currentMentor) return;
-  const { error } = await supabase.from("mentor_saved_words").delete().eq("mentor_id", currentMentor.id);
+  const { error } = await sb.from("mentor_saved_words").delete().eq("mentor_id", currentMentor.id);
   if (error) console.error("syncSavedWordsClearAll error:", error);
 }
 
@@ -508,7 +508,7 @@ function getCurrentHistorySupabaseId() {
 async function syncViewedWord(wordKey, lemma, meaning, level) {
   const userId = getCurrentUserId();
   if (!userId) return;
-  const { error } = await supabase.from("user_viewed_words").upsert({
+  const { error } = await sb.from("user_viewed_words").upsert({
     user_id: userId, word_key: wordKey, lemma: lemma || "", meaning: meaning || "", level: level || "",
     content_source_id: getCurrentHistorySupabaseId(),
   }, { onConflict: "user_id,word_key" });
@@ -517,17 +517,17 @@ async function syncViewedWord(wordKey, lemma, meaning, level) {
 async function syncListenStats(contentSourceId, seconds) {
   const userId = getCurrentUserId();
   if (!userId || !contentSourceId) return;
-  const { data: existing, error: selErr } = await supabase.from("user_listen_stats").select("*")
+  const { data: existing, error: selErr } = await sb.from("user_listen_stats").select("*")
     .eq("user_id", userId).eq("content_source_id", contentSourceId).maybeSingle();
   if (selErr) { console.error("syncListenStats select error:", selErr); return; }
   const nowIso = new Date().toISOString();
   if (existing) {
-    const { error } = await supabase.from("user_listen_stats").update({
+    const { error } = await sb.from("user_listen_stats").update({
       listen_count: (existing.listen_count || 0) + 1, total_seconds: (existing.total_seconds || 0) + seconds, last_listened_at: nowIso,
     }).eq("id", existing.id);
     if (error) console.error("syncListenStats update error:", error);
   } else {
-    const { error } = await supabase.from("user_listen_stats").insert({
+    const { error } = await sb.from("user_listen_stats").insert({
       user_id: userId, content_source_id: contentSourceId, listen_count: 1, total_seconds: seconds, last_listened_at: nowIso,
     });
     if (error) console.error("syncListenStats insert error:", error);
@@ -548,18 +548,18 @@ async function hydrateFromSupabase() {
   const s = getStats();
 
   if ((currentMentor.credits || 0) === 0 && (s.credits || 0) > 0) {
-    await supabase.from("mentors").update({ credits: s.credits }).eq("id", mentorId);
+    await sb.from("mentors").update({ credits: s.credits }).eq("id", mentorId);
     _lastSyncedCredits = s.credits;
   } else {
     s.credits = currentMentor.credits || 0;
     _lastSyncedCredits = s.credits;
   }
 
-  const { data: remoteHistory, error: histErr } = await supabase.from("mentor_history").select("*").eq("mentor_id", mentorId);
+  const { data: remoteHistory, error: histErr } = await sb.from("mentor_history").select("*").eq("mentor_id", mentorId);
   if (!histErr) {
     const localHistory = JSON.parse(localStorage.getItem("history_en8") || "[]");
     if ((remoteHistory || []).length === 0 && localHistory.length > 0) {
-      await supabase.from("mentor_history").insert(localHistory.map(h => ({
+      await sb.from("mentor_history").insert(localHistory.map(h => ({
         mentor_id: mentorId, client_id: String(h.time), text: h.text || "", result: h.result || "",
         level: h.level || "A1-A2", custom_name: h.customName || null, done: !!h.done,
         folder_id: h.folderId || getDefaultFolderId(normalizeLibLevel(h.level || "A1-A2")),
@@ -573,10 +573,10 @@ async function hydrateFromSupabase() {
     }
   }
 
-  const { data: remoteWords, error: wordsErr } = await supabase.from("mentor_saved_words").select("*").eq("mentor_id", mentorId);
+  const { data: remoteWords, error: wordsErr } = await sb.from("mentor_saved_words").select("*").eq("mentor_id", mentorId);
   if (!wordsErr) {
     if ((remoteWords || []).length === 0 && (s.savedWordsList || []).length > 0) {
-      await supabase.from("mentor_saved_words").insert(s.savedWordsList.map(w => ({
+      await sb.from("mentor_saved_words").insert(s.savedWordsList.map(w => ({
         mentor_id: mentorId, word_key: w.key, lemma: w.lemma || "", meaning: w.meaning || "", level: w.level || "",
       })));
     } else if ((remoteWords || []).length > 0) {
@@ -596,7 +596,7 @@ async function hydrateFromSupabase() {
 let currentStudent = null; // hồ sơ public.students của người đang đăng nhập, null nếu không phải Student
 
 async function loadCurrentStudent(userId) {
-  const { data, error } = await supabase.from("students").select("*").eq("id", userId).single();
+  const { data, error } = await sb.from("students").select("*").eq("id", userId).single();
   if (error) { return null; } // không có row = tài khoản này là mentor, không phải lỗi thật
   return data;
 }
@@ -617,7 +617,7 @@ function updateAuthUI() {
   if (portal) portal.style.display = currentStudent ? "block" : "none";
 }
 
-supabase.auth.onAuthStateChange(async (_event, session) => {
+sb.auth.onAuthStateChange(async (_event, session) => {
   if (!session) { currentMentor = null; currentStudent = null; updateAuthUI(); return; }
   currentMentor = await loadCurrentMentor(session.user.id);
   currentStudent = currentMentor ? null : await loadCurrentStudent(session.user.id);
@@ -664,8 +664,8 @@ async function submitAuth() {
   if (!email || !password) { errEl.textContent = "Vui lòng nhập email và mật khẩu."; errEl.style.display = "block"; return; }
 
   const { data, error } = authMode === "register"
-    ? await supabase.auth.signUp({ email, password, options: { data: { full_name: fullName, role: authRole } } })
-    : await supabase.auth.signInWithPassword({ email, password });
+    ? await sb.auth.signUp({ email, password, options: { data: { full_name: fullName, role: authRole } } })
+    : await sb.auth.signInWithPassword({ email, password });
 
   if (error) { errEl.textContent = error.message; errEl.style.display = "block"; return; }
 
@@ -678,7 +678,7 @@ async function submitAuth() {
   closeAuthModal();
 }
 
-async function handleSignOut() { await supabase.auth.signOut(); }
+async function handleSignOut() { await sb.auth.signOut(); }
 
 const MAX_CREDITS = 30;
 const txt = document.getElementById("txt");
@@ -1197,7 +1197,7 @@ async function renameExam(examId) {
   if (!e) return;
   const name = prompt("Đổi tên đề:", e.title);
   if (!name || !name.trim() || name.trim()===e.title) return;
-  const { error } = await supabase.from("mentor_exams").update({ title: name.trim() }).eq("id", examId);
+  const { error } = await sb.from("mentor_exams").update({ title: name.trim() }).eq("id", examId);
   if (error) { alert("Lỗi đổi tên: "+error.message); return; }
   e.title = name.trim();
   refreshLibraryExplorer();
@@ -1247,7 +1247,7 @@ async function confirmMove(targetFolderId) {
     let finalFolderId = targetFolderId;
     if (kind==="de") finalFolderId = await getOrCreateExamSubFolder(targetFolderId);
     if (!finalFolderId) { alert("Không xác định được folder đích."); return; }
-    const { error } = await supabase.from("mentor_exams").update({ folder_id: finalFolderId }).eq("id", itemId);
+    const { error } = await sb.from("mentor_exams").update({ folder_id: finalFolderId }).eq("id", itemId);
     if (error) { alert("Lỗi di chuyển: "+error.message); return; }
     const e = mentorExams.find(x => x.id===itemId);
     if (e) e.folder_id = finalFolderId;
@@ -1342,7 +1342,7 @@ async function createFolder(level) {
   if (!(await ensureMentorSession())) { alert("Vui lòng đăng nhập để tạo folder."); return; }
   const name = prompt("Tên folder mới:");
   if (!name || !name.trim()) return;
-  const { data, error } = await supabase.from("mentor_folders").insert({
+  const { data, error } = await sb.from("mentor_folders").insert({
     mentor_id: currentMentor.id, name: name.trim(), level, folder_type: "content", is_auto: false,
   }).select().single();
   if (error) { alert("Lỗi tạo folder: " + error.message); return; }
@@ -1355,7 +1355,7 @@ async function renameFolder(folderId) {
   if (!f || f.is_auto) return;
   const name = prompt("Đổi tên folder:", f.name);
   if (!name || !name.trim() || name.trim() === f.name) return;
-  const { error } = await supabase.from("mentor_folders").update({ name: name.trim() }).eq("id", folderId);
+  const { error } = await sb.from("mentor_folders").update({ name: name.trim() }).eq("id", folderId);
   if (error) { alert("Lỗi đổi tên: " + error.message); return; }
   f.name = name.trim();
   loadHistory();
@@ -1391,7 +1391,7 @@ async function deleteFolder(folderId) {
     }
   }
 
-  const { error } = await supabase.from("mentor_folders").delete().eq("id", folderId);
+  const { error } = await sb.from("mentor_folders").delete().eq("id", folderId);
   if (error) { alert("Lỗi xoá folder: " + error.message); return; }
   mentorFolders = mentorFolders.filter(x => x.id !== folderId && x.parent_folder_id !== folderId);
   loadHistory(); updateBadges();
@@ -3429,7 +3429,7 @@ function openExam(examId){
 }
 async function deleteExam(examId){
   if(!confirm("Xóa đề này?"))return;
-  const { error } = await supabase.from("mentor_exams").delete().eq("id", examId);
+  const { error } = await sb.from("mentor_exams").delete().eq("id", examId);
   if (error) { alert("Lỗi xoá đề: "+error.message); return; }
   mentorExams = mentorExams.filter(e=>e.id!==examId);
   loadSavedExamsList();
@@ -3889,7 +3889,7 @@ if(!allParts.length)throw new Error("AI không trả về đề hợp lệ");
 const totalQ=allParts.reduce((a,p)=>a+(p.sections||[]).reduce((b,s)=>b+(s.questions?.length||0),0),0);
 const finalFolderId = meta.kind==="de" ? await getOrCreateExamSubFolder(meta.folderId) : meta.folderId;
 if(!finalFolderId) throw new Error("Không xác định được folder để lưu đề.");
-const { data: examRow, error: insErr } = await supabase.from("mentor_exams").insert({
+const { data: examRow, error: insErr } = await sb.from("mentor_exams").insert({
   mentor_id: currentMentor.id, folder_id: finalFolderId, title: examTitle,
   kind: meta.kind, exam_type: isVocab?"vocab":_examType, level: domLevel,
   duration_minutes: duration, questions_count: totalQ, payload: { parts: allParts },
@@ -4688,7 +4688,7 @@ function examSubmit(timeUp=false){
   try{
     const examId=_exam.data.id;
     if(currentMentor&&examId){
-      supabase.from("mentor_exams").update({last_score:pct}).eq("id",examId).then(({error})=>{
+      sb.from("mentor_exams").update({last_score:pct}).eq("id",examId).then(({error})=>{
         if(error)console.error("update last_score error:",error);
       });
       const item=mentorExams.find(e=>e.id===examId);
@@ -4696,7 +4696,7 @@ function examSubmit(timeUp=false){
     }
     if(typeof currentStudent!=="undefined"&&currentStudent&&examId){
       const timeSpentSeconds=Math.max(0,Math.round((Date.now()-(_exam.startedAt||Date.now()))/1000));
-      supabase.from("student_exam_submissions").insert({
+      sb.from("student_exam_submissions").insert({
         exam_id:examId, student_id:currentStudent.id,
         answers:_exam.answers, score:pct, breakdown,
         time_spent_seconds:timeSpentSeconds,
