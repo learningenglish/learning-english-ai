@@ -15,27 +15,670 @@ const APP_SECRET = "Learning-English-AI";
  * @param {object} data   - tham số cho action đó
  * @returns {Promise<string|null>} nội dung trả lời (string), null nếu lỗi
  */
+// Set bởi callWorker khi Server chặn vì hết credit tầng Student (403) — callAI đọc
+// biến này ngay sau callWorker() để phân biệt "bị chặn có lý do" với "lỗi mạng thật".
+let lastBlockMessage = null;
 async function callWorker(action, data) {
   try {
+    const headers = {
+      "Content-Type": "application/json",
+      "X-App-Secret": APP_SECRET,
+    };
+    // Chỉ gắn token khi đang đăng nhập Student — Server (chat.js) dùng token này để
+    // tra đúng gói (Free/Basic/Pro) và trừ credit atomic trước khi gọi OpenAI. Mentor
+    // không gắn header này nên hệ thống credit hiện có của Mentor không bị ảnh hưởng.
+    if (currentStudent) {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (session) headers["X-Student-Token"] = session.access_token;
+    }
     const r = await fetch(WORKER_URL, {
       method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "X-App-Secret": APP_SECRET,
-      },
+      headers,
       body: JSON.stringify({ action, ...data }),
     });
     const result = await r.json();
     if (!r.ok || result.error) {
       console.error("Worker error:", result.error);
+      lastBlockMessage = r.status === 403 ? result.error : null;
       return null;
     }
+    lastBlockMessage = null;
     return result.content;
   } catch (e) {
     console.error("Network error calling worker:", e);
+    lastBlockMessage = null;
     return null;
   }
 }
+
+// ====== SUPABASE (Auth + hồ sơ Mentor) ======
+// Lấy 2 giá trị này trong Supabase Dashboard > Project Settings > API
+const SUPABASE_URL = "https://ijwttrlxsmgaqxszphlp.supabase.co";
+const SUPABASE_ANON_KEY = "sb_publishable_D6NUatDu3ZapsLRwjKiBJw_Uh0ku3An";
+
+const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+let currentMentor = null; // hồ sơ public.mentors của người đang đăng nhập, null nếu chưa đăng nhập
+let authMode = "login"; // "login" | "register", đang chọn trong authModal
+
+async function loadCurrentMentor(userId) {
+  const { data, error } = await supabase.from("mentors").select("*").eq("id", userId).single();
+  if (error) { console.error("loadCurrentMentor error:", error); return null; }
+  return data;
+}
+
+// currentMentor là biến cache — nếu tab để lâu / token vừa refresh, nó có thể
+// tạm thời chưa kịp cập nhật dù phiên đăng nhập vẫn còn hiệu lực. Trước khi
+// CHẶN một hành động (báo "vui lòng đăng nhập"), luôn xác minh lại session
+// thật qua Supabase để tránh báo sai khi thực ra vẫn đang đăng nhập.
+async function ensureMentorSession() {
+  if (currentMentor) return currentMentor;
+  const { data: { session } } = await supabase.auth.getSession();
+  if (session) currentMentor = await loadCurrentMentor(session.user.id);
+  return currentMentor;
+}
+
+// ====== Cache mentor_folders (nạp lại sau khi login/tạo/sửa/xoá folder) ======
+let mentorFolders = [];
+
+async function loadMentorFolders() {
+  if (!currentMentor) { mentorFolders = []; return; }
+  const { data, error } = await supabase.from("mentor_folders").select("*").eq("mentor_id", currentMentor.id);
+  if (error) { console.error("loadMentorFolders error:", error); return; }
+  mentorFolders = data || [];
+}
+function getDefaultFolderId(level) {
+  const f = mentorFolders.find(x => x.level === level && x.folder_type === "content" && x.is_auto);
+  return f ? f.id : null;
+}
+function getReviewFolderId(level) {
+  const f = mentorFolders.find(x => x.level === level && x.folder_type === "review" && x.is_auto);
+  return f ? f.id : null;
+}
+async function getOrCreateExamSubFolder(contentFolderId) {
+  const existing = mentorFolders.find(f => f.parent_folder_id === contentFolderId && f.folder_type === "exam_sub");
+  if (existing) return existing.id;
+  const parent = mentorFolders.find(f => f.id === contentFolderId);
+  const { data, error } = await supabase.from("mentor_folders").insert({
+    mentor_id: currentMentor.id, name: "Đề kiểm tra", level: parent ? parent.level : "A1-A2",
+    folder_type: "exam_sub", is_auto: true, parent_folder_id: contentFolderId,
+  }).select().single();
+  if (error) { console.error("getOrCreateExamSubFolder error:", error); return null; }
+  mentorFolders.push(data);
+  return data.id;
+}
+
+// ====== Cache mentor_exams (nạp lại sau khi login/tạo/xoá đề) ======
+let mentorExams = [];
+async function loadMentorExams() {
+  if (!currentMentor) { mentorExams = []; return; }
+  const { data, error } = await supabase.from("mentor_exams").select("*").eq("mentor_id", currentMentor.id).order("created_at", { ascending: false });
+  if (error) { console.error("loadMentorExams error:", error); return; }
+  mentorExams = data || [];
+}
+
+// ====== Roster (mentor_students) + Chia sẻ (mentor_shares) ======
+let mentorRoster = []; // [{student_id, email, full_name, added_at}]
+let mentorShares = []; // toàn bộ share hiện có của mentor, để biết mục nào đã share cho ai
+
+async function loadMentorRoster() {
+  if (!currentMentor) { mentorRoster = []; return; }
+  const { data, error } = await supabase.rpc("get_my_roster");
+  if (error) { console.error("loadMentorRoster error:", error); return; }
+  mentorRoster = data || [];
+}
+async function loadMentorShares() {
+  if (!currentMentor) { mentorShares = []; return; }
+  const { data, error } = await supabase.from("mentor_shares").select("*").eq("mentor_id", currentMentor.id);
+  if (error) { console.error("loadMentorShares error:", error); return; }
+  mentorShares = data || [];
+}
+
+async function addToRoster() {
+  const input = document.getElementById("rosterEmailInput");
+  const email = input.value.trim();
+  if (!email) return;
+  if (!(await ensureMentorSession())) { alert("Vui lòng đăng nhập."); return; }
+  const { data: found, error: rpcErr } = await supabase.rpc("find_student_by_email", { p_email: email });
+  if (rpcErr) { alert("Lỗi tra cứu: " + rpcErr.message); return; }
+  if (!found || !found.length) {
+    alert(`Email "${email}" chưa đăng ký tài khoản Student. Hãy nhắc học viên tạo tài khoản (chọn vai trò Student) trước.`);
+    return;
+  }
+  const student = found[0];
+  const { error: insErr } = await supabase.from("mentor_students").insert({
+    mentor_id: currentMentor.id, student_id: student.id,
+  });
+  if (insErr) {
+    if (insErr.code === "23505") alert("Học viên này đã có trong danh sách của bạn.");
+    else alert("Lỗi thêm học viên: " + insErr.message);
+    return;
+  }
+  input.value = "";
+  await loadMentorRoster();
+  loadRosterPanel();
+}
+
+async function removeFromRoster(studentId) {
+  if (!confirm("Xoá học viên này khỏi danh sách? (không xoá tài khoản của họ)")) return;
+  const { error } = await supabase.from("mentor_students").delete().eq("mentor_id", currentMentor.id).eq("student_id", studentId);
+  if (error) { alert("Lỗi xoá: " + error.message); return; }
+  mentorRoster = mentorRoster.filter(r => r.student_id !== studentId);
+  loadRosterPanel();
+}
+
+function loadRosterPanel() {
+  const el = document.getElementById("rosterContent");
+  if (!el) return;
+  if (!mentorRoster.length) {
+    el.innerHTML = '<div style="color:#aaa;font-size:13px;padding:8px">Chưa có học viên nào. Thêm bằng email đã đăng ký ở trên.</div>';
+    return;
+  }
+  el.innerHTML = mentorRoster.map(r => `
+    <div class="hist-item">
+      <div style="flex:1;min-width:0">
+        <div class="hist-text">${r.full_name || r.email}</div>
+        <div style="font-size:10px;color:#aaa;margin-top:1px">${r.email}</div>
+      </div>
+      <div class="hist-actions">
+        <button class="hist-btn" onclick="openStudentProfile('${r.student_id}')" title="Xem hồ sơ">👁</button>
+        <button class="hist-btn" onclick="removeFromRoster('${r.student_id}')" title="Xoá khỏi danh sách" style="color:#dc3545">🗑</button>
+      </div>
+    </div>`).join("");
+}
+function closeInfoModal() { document.getElementById("infoModal").classList.remove("open"); }
+
+async function openStudentProfile(studentId) {
+  const student = mentorRoster.find(r => r.student_id === studentId);
+  if (!student) return;
+  document.getElementById("infoModalTitle").textContent = "👤 " + (student.full_name || student.email);
+  document.getElementById("infoModalBody").innerHTML = '<div style="padding:20px;text-align:center;color:#888">Đang tải...</div>';
+  document.getElementById("infoModal").classList.add("open");
+
+  const sharedExamIds = mentorShares.filter(s => s.student_id === studentId && s.item_type === "exam").map(s => s.item_id);
+  const [{ data: submissions }, { data: activityRows }, { count: viewedCount }, { data: listenRows }] = await Promise.all([
+    supabase.from("student_exam_submissions").select("*").eq("student_id", studentId),
+    supabase.rpc("get_roster_activity"),
+    supabase.from("user_viewed_words").select("*", { count: "exact", head: true }).eq("user_id", studentId),
+    supabase.from("user_listen_stats").select("listen_count,total_seconds").eq("user_id", studentId),
+  ]);
+
+  const activity = (activityRows || []).find(a => a.student_id === studentId);
+  const subsByExam = {};
+  (submissions || []).forEach(s => { (subsByExam[s.exam_id] = subsByExam[s.exam_id] || []).push(s); });
+
+  const examList = sharedExamIds.map(examId => {
+    const exam = mentorExams.find(e => e.id === examId);
+    const subs = subsByExam[examId] || [];
+    const best = subs.length ? Math.max(...subs.map(s => s.score || 0)) : null;
+    const latest = subs.length ? subs.slice().sort((a, b) => new Date(b.submitted_at) - new Date(a.submitted_at))[0] : null;
+    const attemptsSorted = subs.slice().sort((a, b) => (a.attempt_number || 0) - (b.attempt_number || 0));
+    return { title: exam ? exam.title : "(đề đã bị xoá)", best, latestScore: latest ? latest.score : null, breakdown: latest ? latest.breakdown : null, attempts: subs.length, attemptsSorted };
+  });
+
+  const doneCount = examList.filter(e => e.attempts > 0).length;
+  const pendingCount = examList.length - doneCount;
+  const bestScores = examList.filter(e => e.best != null).map(e => e.best);
+  const overallBest = bestScores.length ? Math.max(...bestScores) : null;
+  const totalListenCount = (listenRows || []).reduce((a, r) => a + (r.listen_count || 0), 0);
+  const totalListenSec = (listenRows || []).reduce((a, r) => a + (r.total_seconds || 0), 0);
+
+  document.getElementById("infoModalBody").innerHTML = `
+    <div style="margin-bottom:14px">
+      <div style="font-size:12px;color:#888;font-weight:700;text-transform:uppercase;margin-bottom:6px">Tổng quan</div>
+      <div class="stat-row"><span class="stat-label">Đã hoàn thành</span><span class="stat-value">${doneCount} đề</span></div>
+      <div class="stat-row"><span class="stat-label">Chưa hoàn thành</span><span class="stat-value">${pendingCount} đề</span></div>
+      <div class="stat-row"><span class="stat-label">Điểm cao nhất chung</span><span class="stat-value">${overallBest != null ? overallBest + "%" : "—"}</span></div>
+    </div>
+    <div style="margin-bottom:14px">
+      <div style="font-size:12px;color:#888;font-weight:700;text-transform:uppercase;margin-bottom:6px">Mức độ sử dụng</div>
+      <div class="stat-row"><span class="stat-label">Đăng nhập gần nhất</span><span class="stat-value">${activity && activity.last_sign_in_at ? new Date(activity.last_sign_in_at).toLocaleString("vi-VN") : "—"}</span></div>
+      <div class="stat-row"><span class="stat-label">Từ đã tra</span><span class="stat-value">${viewedCount || 0}</span></div>
+      <div class="stat-row"><span class="stat-label">Câu đã nghe</span><span class="stat-value">${totalListenCount}</span></div>
+      <div class="stat-row"><span class="stat-label">Thời lượng nghe</span><span class="stat-value">${Math.floor(totalListenSec/60)}m ${totalListenSec%60}s</span></div>
+      <div class="stat-row"><span class="stat-label">Tỷ lệ hoàn thành đề được giao</span><span class="stat-value">${examList.length ? Math.round(doneCount/examList.length*100) : 0}%</span></div>
+    </div>
+    <div>
+      <div style="font-size:12px;color:#888;font-weight:700;text-transform:uppercase;margin-bottom:6px">Đề đã giao</div>
+      ${examList.length ? examList.map(e => `
+        <div style="background:#f8f9fb;border-radius:8px;padding:10px 12px;margin-bottom:6px">
+          <div style="font-weight:600;font-size:13px;color:#1a3c6e;margin-bottom:4px">${e.title}</div>
+          ${e.attempts ? `
+            <div style="font-size:12px;color:#555">Điểm cao nhất: <b style="color:#1e7e34">${e.best}%</b> · Điểm gần nhất: <b>${e.latestScore}%</b> · ${e.attempts} lần làm</div>
+            ${e.breakdown ? `<div style="font-size:11px;color:#888;margin-top:4px">${e.breakdown.map(b=>`${b.name}: ${b.ok}/${b.tot}`).join(" · ")}</div>` : ""}
+            <div style="font-size:11px;color:#888;margin-top:4px">${e.attemptsSorted.map(s=>`Lần ${s.attempt_number||"?"}: ${s.score}%${s.time_spent_seconds!=null?` (${Math.floor(s.time_spent_seconds/60)}p${s.time_spent_seconds%60}s)`:""}`).join(" · ")}</div>
+          ` : `<div style="font-size:12px;color:#aaa">Chưa làm</div>`}
+        </div>`).join("") : '<div style="color:#aaa;font-size:13px">Chưa được giao đề nào.</div>'}
+    </div>`;
+}
+
+async function openExamStats(examId) {
+  const exam = mentorExams.find(e => e.id === examId);
+  if (!exam) return;
+  document.getElementById("infoModalTitle").textContent = "📊 " + exam.title;
+  document.getElementById("infoModalBody").innerHTML = '<div style="padding:20px;text-align:center;color:#888">Đang tải...</div>';
+  document.getElementById("infoModal").classList.add("open");
+
+  const sharedCount = mentorShares.filter(s => s.item_type === "exam" && s.item_id === examId).length;
+  const { data: submissions } = await supabase.from("student_exam_submissions").select("student_id,score").eq("exam_id", examId);
+  const byStudent = {};
+  (submissions || []).forEach(s => { if (s.score != null && (byStudent[s.student_id] == null || s.score > byStudent[s.student_id])) byStudent[s.student_id] = s.score; });
+  const bestScores = Object.values(byStudent);
+  const doneCount = bestScores.length;
+  const avg = bestScores.length ? Math.round(bestScores.reduce((a, b) => a + b, 0) / bestScores.length) : null;
+  const max = bestScores.length ? Math.max(...bestScores) : null;
+  const min = bestScores.length ? Math.min(...bestScores) : null;
+
+  document.getElementById("infoModalBody").innerHTML = `
+    <div class="stat-row"><span class="stat-label">Đã làm / Được chia sẻ</span><span class="stat-value">${doneCount}/${sharedCount}</span></div>
+    <div class="stat-row"><span class="stat-label">Điểm trung bình (nhóm)</span><span class="stat-value">${avg != null ? avg + "%" : "—"}</span></div>
+    <div class="stat-row"><span class="stat-label">Điểm cao nhất</span><span class="stat-value">${max != null ? max + "%" : "—"}</span></div>
+    <div class="stat-row"><span class="stat-label">Điểm thấp nhất</span><span class="stat-value">${min != null ? min + "%" : "—"}</span></div>`;
+}
+
+// ---- Chia sẻ nội dung/đề cho học viên ----
+let _shareTarget = null; // {itemType:'history'|'exam', itemId}
+
+async function openShareModal(itemType, itemId) {
+  if (!(await ensureMentorSession())) { alert("Vui lòng đăng nhập để chia sẻ."); return; }
+  if (!mentorRoster.length) { alert("Bạn chưa có học viên nào trong danh sách. Vào mục 👥 Học viên để thêm trước."); return; }
+  _shareTarget = { itemType, itemId };
+  renderShareModal();
+  document.getElementById("shareModal").classList.add("open");
+}
+function closeShareModal() { document.getElementById("shareModal").classList.remove("open"); }
+function renderShareModal() {
+  const el = document.getElementById("shareStudentList");
+  if (!el || !_shareTarget) return;
+  const { itemType, itemId } = _shareTarget;
+  el.innerHTML = mentorRoster.map(r => {
+    const shared = mentorShares.some(s => s.item_type===itemType && s.item_id===itemId && s.student_id===r.student_id);
+    return `
+    <label style="display:flex;align-items:center;gap:8px;padding:8px 4px;border-bottom:1px solid #eef2f7;cursor:pointer">
+      <input type="checkbox" ${shared?"checked":""} onchange="toggleShare('${r.student_id}',this.checked)">
+      <span style="font-size:13px;color:#0a2540">${r.full_name || r.email}</span>
+    </label>`;
+  }).join("");
+}
+async function shareHistoryItem(time) {
+  if (!(await ensureMentorSession())) { alert("Vui lòng đăng nhập để chia sẻ."); return; }
+  const h = JSON.parse(localStorage.getItem("history_en8") || "[]");
+  const item = h.find(x => x.time === time);
+  if (item && item.supabaseId) { openShareModal("history", item.supabaseId); return; }
+  const { data, error } = await supabase.from("mentor_history").select("id").eq("mentor_id", currentMentor.id).eq("client_id", String(time)).single();
+  if (error || !data) { alert("Nội dung này chưa đồng bộ xong lên máy chủ, vui lòng thử lại sau giây lát."); return; }
+  openShareModal("history", data.id);
+}
+async function toggleShare(studentId, on) {
+  if (!_shareTarget) return;
+  const { itemType, itemId } = _shareTarget;
+  if (on) {
+    const { error } = await supabase.from("mentor_shares").insert({
+      mentor_id: currentMentor.id, student_id: studentId, item_type: itemType, item_id: itemId,
+    });
+    if (error) { alert("Lỗi chia sẻ: " + error.message); return; }
+    mentorShares.push({ mentor_id: currentMentor.id, student_id: studentId, item_type: itemType, item_id: itemId, viewed_at: null });
+  } else {
+    const { error } = await supabase.from("mentor_shares").delete()
+      .eq("mentor_id", currentMentor.id).eq("student_id", studentId).eq("item_type", itemType).eq("item_id", itemId);
+    if (error) { alert("Lỗi bỏ chia sẻ: " + error.message); return; }
+    mentorShares = mentorShares.filter(s => !(s.item_type===itemType && s.item_id===itemId && s.student_id===studentId));
+  }
+}
+
+// ====== Student: xem nội dung/đề được chia sẻ + nộp bài ======
+let studentShares = [], studentHistoryItems = [], studentExamItems = [];
+let studentExamAttemptCounts = {}; // {exam_id: số lần đã nộp} — dùng để khoá đề sau 3 lần
+
+async function loadStudentPortal() {
+  if (!currentStudent) return;
+  const [{ data: shares, error: shErr }, { data: historyRows, error: hErr }, { data: examRows, error: eErr }, { data: subRows, error: subErr }] = await Promise.all([
+    supabase.from("mentor_shares").select("*").eq("student_id", currentStudent.id),
+    supabase.from("mentor_history").select("*"),
+    supabase.from("mentor_exams").select("*"),
+    supabase.from("student_exam_submissions").select("exam_id").eq("student_id", currentStudent.id),
+  ]);
+  if (shErr) console.error("loadStudentPortal shares error:", shErr);
+  if (hErr) console.error("loadStudentPortal history error:", hErr);
+  if (eErr) console.error("loadStudentPortal exams error:", eErr);
+  if (subErr) console.error("loadStudentPortal submissions error:", subErr);
+  studentShares = shares || [];
+  studentHistoryItems = historyRows || [];
+  studentExamItems = examRows || [];
+  studentExamAttemptCounts = {};
+  (subRows || []).forEach(s => { studentExamAttemptCounts[s.exam_id] = (studentExamAttemptCounts[s.exam_id] || 0) + 1; });
+  renderStudentPortal();
+}
+
+function renderStudentPortal() {
+  const el = document.getElementById("studentSharedList");
+  if (!el) return;
+  if (!studentShares.length) {
+    el.innerHTML = '<div style="color:#aaa;font-size:13px">Chưa có nội dung nào được chia sẻ cho bạn.</div>';
+    return;
+  }
+  const items = studentShares.map(s => {
+    if (s.item_type === "history") {
+      const h = studentHistoryItems.find(x => x.id === s.item_id);
+      if (!h) return null;
+      return { type: "history", id: h.id, title: (h.custom_name || h.text || "").slice(0, 60), level: h.level, viewed: !!s.viewed_at };
+    } else {
+      const e = studentExamItems.find(x => x.id === s.item_id);
+      if (!e) return null;
+      return { type: "exam", id: e.id, title: e.title, level: e.level, viewed: !!s.viewed_at, attempts: studentExamAttemptCounts[e.id] || 0 };
+    }
+  }).filter(Boolean);
+  if (!items.length) {
+    el.innerHTML = '<div style="color:#aaa;font-size:13px">Chưa có nội dung nào được chia sẻ cho bạn.</div>';
+    return;
+  }
+  el.innerHTML = items.map(it => {
+    const examLocked = it.type === "exam" && it.attempts >= 3;
+    return `
+    <div class="hist-item" style="${examLocked?"opacity:.55":"cursor:pointer"}" ${examLocked?"":`onclick="${it.type==='history'?`openSharedHistory('${it.id}')`:`openSharedExam('${it.id}')`}"`}>
+      <div style="flex:1;min-width:0">
+        <div class="hist-text">${it.viewed?"":"🆕 "}${it.type==='exam'?"📝 ":"📄 "}${it.title || "(không có tiêu đề)"}</div>
+        <div style="font-size:10px;color:#aaa;margin-top:1px">Level ${it.level}${it.type==="exam"?" · Đề/Bài kiểm tra":" · Nội dung"}</div>
+        ${examLocked?'<div style="font-size:10px;color:#c0392b;font-weight:600;margin-top:2px">Đã dùng hết 3 lượt làm bài cho đề này</div>':""}
+      </div>
+    </div>`;
+  }).join("");
+}
+
+async function markShareViewed(itemType, itemId) {
+  if (!currentStudent) return;
+  const share = studentShares.find(s => s.item_type === itemType && s.item_id === itemId);
+  if (!share || share.viewed_at) return;
+  const nowIso = new Date().toISOString();
+  const { error } = await supabase.from("mentor_shares").update({ viewed_at: nowIso })
+    .eq("mentor_id", share.mentor_id).eq("student_id", currentStudent.id).eq("item_type", itemType).eq("item_id", itemId);
+  if (error) { console.error("markShareViewed error:", error); return; }
+  share.viewed_at = nowIso;
+}
+
+function openSharedHistory(id) {
+  const h = studentHistoryItems.find(x => x.id === id);
+  if (!h) return;
+  markShareViewed("history", id);
+  const el = document.getElementById("studentSharedList");
+  el.innerHTML = `
+    <button onclick="renderStudentPortal()" style="margin-bottom:10px;background:#eaf4fb;border:1px solid #aed6f1;border-radius:6px;padding:6px 12px;cursor:pointer;font-size:13px;color:#1a5f8a">← Quay lại</button>
+    <div style="background:#fff;border-radius:12px;padding:16px;box-shadow:0 2px 12px rgba(10,37,64,.08);overflow-x:auto">${h.result || "<i>Không có nội dung hiển thị.</i>"}</div>`;
+}
+async function openSharedExam(id) {
+  markShareViewed("exam", id);
+  let attemptNumber = 1;
+  if (currentStudent) {
+    const { count, error } = await supabase.from("student_exam_submissions")
+      .select("id", { count: "exact", head: true })
+      .eq("exam_id", id).eq("student_id", currentStudent.id);
+    if (!error) attemptNumber = (count || 0) + 1;
+  }
+  if (attemptNumber > 3) { alert("Đã dùng hết 3 lượt làm bài cho đề này."); return; }
+  const timeCapPct = attemptNumber === 1 ? 100 : attemptNumber === 2 ? 85 : 70;
+  if (attemptNumber > 1 && !confirm(`Đây là lần ${attemptNumber} — điểm tối đa có thể đạt: ${timeCapPct}%. Tiếp tục?`)) return;
+  examOpen(id, { attemptNumber, timeCapPct });
+}
+
+// ====== Đồng bộ credit/lịch sử/từ đã lưu lên Supabase (write-through, chạy nền) ======
+// localStorage vẫn là bộ nhớ đệm đồng bộ dùng cho toàn bộ UI hiện có; các hàm dưới
+// đây chỉ "bắn" thêm dữ liệu lên Supabase mỗi khi có thay đổi, không chặn UI.
+let _lastSyncedCredits = null;
+
+async function syncCreditsToSupabase(credits) {
+  if (!currentMentor || _lastSyncedCredits === credits) return;
+  _lastSyncedCredits = credits;
+  const { error } = await supabase.from("mentors").update({ credits }).eq("id", currentMentor.id);
+  if (error) console.error("syncCreditsToSupabase error:", error);
+}
+
+async function syncHistoryUpsert(item) {
+  if (!currentMentor || !item) return;
+  const level = item.level || "A1-A2";
+  const folderId = item.folderId || getDefaultFolderId(normalizeLibLevel(level));
+  if (!folderId) { console.error("syncHistoryUpsert: không tìm thấy folder mặc định cho level", level); return; }
+  const { data, error } = await supabase.from("mentor_history").upsert({
+    mentor_id: currentMentor.id,
+    client_id: String(item.time),
+    folder_id: folderId,
+    text: item.text || "",
+    result: item.result || "",
+    level: level,
+    custom_name: item.customName || null,
+    done: !!item.done,
+  }, { onConflict: "mentor_id,client_id" }).select().single();
+  if (error) { console.error("syncHistoryUpsert error:", error); return; }
+  // Lưu lại id thật của Supabase vào localStorage để dùng cho chia sẻ / thống kê nghe
+  if (data) {
+    let h = JSON.parse(localStorage.getItem("history_en8") || "[]");
+    h = h.map(x => x.time === item.time ? { ...x, supabaseId: data.id } : x);
+    localStorage.setItem("history_en8", JSON.stringify(h));
+  }
+}
+
+async function syncHistoryDelete(time) {
+  if (!currentMentor) return;
+  const { error } = await supabase.from("mentor_history").delete()
+    .eq("mentor_id", currentMentor.id).eq("client_id", String(time));
+  if (error) console.error("syncHistoryDelete error:", error);
+}
+
+async function syncHistoryClearAll() {
+  if (!currentMentor) return;
+  const { error } = await supabase.from("mentor_history").delete().eq("mentor_id", currentMentor.id);
+  if (error) console.error("syncHistoryClearAll error:", error);
+}
+
+async function syncSavedWordUpsert(word) {
+  if (!currentMentor || !word) return;
+  const { error } = await supabase.from("mentor_saved_words").upsert({
+    mentor_id: currentMentor.id,
+    word_key: word.key,
+    lemma: word.lemma || "",
+    meaning: word.meaning || "",
+    level: word.level || "",
+  }, { onConflict: "mentor_id,word_key" });
+  if (error) console.error("syncSavedWordUpsert error:", error);
+}
+
+async function syncSavedWordDelete(wordKey) {
+  if (!currentMentor) return;
+  const { error } = await supabase.from("mentor_saved_words").delete()
+    .eq("mentor_id", currentMentor.id).eq("word_key", wordKey);
+  if (error) console.error("syncSavedWordDelete error:", error);
+}
+
+async function syncSavedWordsClearAll() {
+  if (!currentMentor) return;
+  const { error } = await supabase.from("mentor_saved_words").delete().eq("mentor_id", currentMentor.id);
+  if (error) console.error("syncSavedWordsClearAll error:", error);
+}
+
+// ====== Hoạt động học tập dùng chung (user_viewed_words / user_listen_stats) ======
+// Dùng chung cho cả mentor lẫn student — chỉ ghi khi đã đăng nhập (currentMentor HOẶC currentStudent).
+function getCurrentUserId() {
+  return currentMentor ? currentMentor.id : (currentStudent ? currentStudent.id : null);
+}
+function getCurrentHistorySupabaseId() {
+  const h = JSON.parse(localStorage.getItem("history_en8") || "[]");
+  const normLevel = {"A1":"A1","A1-A2":"A1-A2","B1":"B1","B2":"B2"}[currentLevel] || "A1-A2";
+  const item = h.find(x => x.text === (typeof txt!=="undefined" && txt ? txt.value : "") && (x.level || "A1-A2") === normLevel);
+  return item ? (item.supabaseId || null) : null;
+}
+async function syncViewedWord(wordKey, lemma, meaning, level) {
+  const userId = getCurrentUserId();
+  if (!userId) return;
+  const { error } = await supabase.from("user_viewed_words").upsert({
+    user_id: userId, word_key: wordKey, lemma: lemma || "", meaning: meaning || "", level: level || "",
+    content_source_id: getCurrentHistorySupabaseId(),
+  }, { onConflict: "user_id,word_key" });
+  if (error) console.error("syncViewedWord error:", error);
+}
+async function syncListenStats(contentSourceId, seconds) {
+  const userId = getCurrentUserId();
+  if (!userId || !contentSourceId) return;
+  const { data: existing, error: selErr } = await supabase.from("user_listen_stats").select("*")
+    .eq("user_id", userId).eq("content_source_id", contentSourceId).maybeSingle();
+  if (selErr) { console.error("syncListenStats select error:", selErr); return; }
+  const nowIso = new Date().toISOString();
+  if (existing) {
+    const { error } = await supabase.from("user_listen_stats").update({
+      listen_count: (existing.listen_count || 0) + 1, total_seconds: (existing.total_seconds || 0) + seconds, last_listened_at: nowIso,
+    }).eq("id", existing.id);
+    if (error) console.error("syncListenStats update error:", error);
+  } else {
+    const { error } = await supabase.from("user_listen_stats").insert({
+      user_id: userId, content_source_id: contentSourceId, listen_count: 1, total_seconds: seconds, last_listened_at: nowIso,
+    });
+    if (error) console.error("syncListenStats insert error:", error);
+  }
+}
+
+// Chạy đúng 1 lần ngay sau khi đăng nhập: nếu tài khoản đã có dữ liệu trên Supabase
+// (đăng nhập từ máy khác, hoặc lần trước đã đồng bộ) -> tải về, GHI ĐÈ localStorage.
+// Nếu tài khoản mới toanh (chưa có gì trên Supabase) mà máy đang có dữ liệu cục bộ
+// (dùng thử trước khi đăng ký) -> đẩy dữ liệu cục bộ lên một lần để không mất dữ liệu.
+async function hydrateFromSupabase() {
+  if (!currentMentor) return;
+  const mentorId = currentMentor.id;
+  await loadMentorFolders();
+  await loadMentorExams();
+  await loadMentorRoster();
+  await loadMentorShares();
+  const s = getStats();
+
+  if ((currentMentor.credits || 0) === 0 && (s.credits || 0) > 0) {
+    await supabase.from("mentors").update({ credits: s.credits }).eq("id", mentorId);
+    _lastSyncedCredits = s.credits;
+  } else {
+    s.credits = currentMentor.credits || 0;
+    _lastSyncedCredits = s.credits;
+  }
+
+  const { data: remoteHistory, error: histErr } = await supabase.from("mentor_history").select("*").eq("mentor_id", mentorId);
+  if (!histErr) {
+    const localHistory = JSON.parse(localStorage.getItem("history_en8") || "[]");
+    if ((remoteHistory || []).length === 0 && localHistory.length > 0) {
+      await supabase.from("mentor_history").insert(localHistory.map(h => ({
+        mentor_id: mentorId, client_id: String(h.time), text: h.text || "", result: h.result || "",
+        level: h.level || "A1-A2", custom_name: h.customName || null, done: !!h.done,
+        folder_id: h.folderId || getDefaultFolderId(normalizeLibLevel(h.level || "A1-A2")),
+      })));
+    } else if ((remoteHistory || []).length > 0) {
+      const merged = remoteHistory.map(r => ({
+        text: r.text, result: r.result, time: Number(r.client_id), done: r.done,
+        level: r.level, customName: r.custom_name || undefined, folderId: r.folder_id,
+      })).sort((a, b) => b.time - a.time);
+      localStorage.setItem("history_en8", JSON.stringify(merged.slice(0, 100)));
+    }
+  }
+
+  const { data: remoteWords, error: wordsErr } = await supabase.from("mentor_saved_words").select("*").eq("mentor_id", mentorId);
+  if (!wordsErr) {
+    if ((remoteWords || []).length === 0 && (s.savedWordsList || []).length > 0) {
+      await supabase.from("mentor_saved_words").insert(s.savedWordsList.map(w => ({
+        mentor_id: mentorId, word_key: w.key, lemma: w.lemma || "", meaning: w.meaning || "", level: w.level || "",
+      })));
+    } else if ((remoteWords || []).length > 0) {
+      s.savedWordsList = remoteWords.map(w => ({
+        key: w.word_key, lemma: w.lemma, meaning: w.meaning, level: w.level, time: new Date(w.created_at).getTime(),
+      })).sort((a, b) => b.time - a.time);
+      s.savedWords = s.savedWordsList.length;
+    }
+  }
+
+  saveStats(s);
+  renderStats(); updateBadges(); loadLibrarySidebar();
+  if (currentPanelId === "pHistory") loadHistory();
+  if (currentPanelId === "pSaved") loadSavedPanel();
+}
+
+let currentStudent = null; // hồ sơ public.students của người đang đăng nhập, null nếu không phải Student
+
+async function loadCurrentStudent(userId) {
+  const { data, error } = await supabase.from("students").select("*").eq("id", userId).single();
+  if (error) { return null; } // không có row = tài khoản này là mentor, không phải lỗi thật
+  return data;
+}
+
+function updateAuthUI() {
+  const loggedIn = !!currentMentor || !!currentStudent;
+  document.getElementById("btnLogin").style.display = loggedIn ? "none" : "";
+  document.getElementById("btnRegister").style.display = loggedIn ? "none" : "";
+  document.getElementById("btnLogout").style.display = loggedIn ? "" : "none";
+  const label = document.getElementById("mentorEmailLabel");
+  label.style.display = loggedIn ? "" : "none";
+  label.textContent = currentMentor ? (currentMentor.full_name || currentMentor.email)
+    : currentStudent ? (currentStudent.full_name || currentStudent.email) + " (Student)"
+    : "";
+  const layout = document.querySelector(".layout");
+  const portal = document.getElementById("studentPortal");
+  if (layout) layout.style.display = currentStudent ? "none" : "flex";
+  if (portal) portal.style.display = currentStudent ? "block" : "none";
+}
+
+supabase.auth.onAuthStateChange(async (_event, session) => {
+  if (!session) { currentMentor = null; currentStudent = null; updateAuthUI(); return; }
+  currentMentor = await loadCurrentMentor(session.user.id);
+  currentStudent = currentMentor ? null : await loadCurrentStudent(session.user.id);
+  updateAuthUI();
+  if (currentMentor) await hydrateFromSupabase();
+  if (currentStudent && typeof loadStudentPortal === "function") await loadStudentPortal();
+});
+
+let authRole = "mentor";
+function setAuthRole(role) {
+  authRole = role;
+  document.getElementById("authRoleMentorBtn")?.classList.toggle("active", role === "mentor");
+  document.getElementById("authRoleStudentBtn")?.classList.toggle("active", role === "student");
+}
+function openAuthModal(mode) {
+  authMode = mode;
+  authRole = "mentor";
+  setAuthRole("mentor");
+  document.getElementById("authError").style.display = "none";
+  document.getElementById("authEmail").value = "";
+  document.getElementById("authPassword").value = "";
+  document.getElementById("authFullName").value = "";
+  applyAuthModeUI();
+  document.getElementById("authModal").classList.add("open");
+}
+function closeAuthModal() { document.getElementById("authModal").classList.remove("open"); }
+function toggleAuthMode() { authMode = authMode === "login" ? "register" : "login"; applyAuthModeUI(); }
+function applyAuthModeUI() {
+  const isRegister = authMode === "register";
+  document.getElementById("authModalTitle").textContent = isRegister ? "🔐 Đăng ký" : "🔐 Đăng nhập";
+  document.getElementById("authRegisterFields").style.display = isRegister ? "block" : "none";
+  document.getElementById("authSubmitBtn").textContent = isRegister ? "Đăng ký" : "Đăng nhập";
+  document.getElementById("authSwitchText").textContent = isRegister ? "Đã có tài khoản?" : "Chưa có tài khoản?";
+  document.getElementById("authSwitchLink").textContent = isRegister ? "Đăng nhập" : "Đăng ký";
+}
+
+async function submitAuth() {
+  const email = document.getElementById("authEmail").value.trim();
+  const password = document.getElementById("authPassword").value;
+  const fullName = document.getElementById("authFullName").value.trim();
+  const errEl = document.getElementById("authError");
+  errEl.style.color = "#c0392b";
+  errEl.style.display = "none";
+  if (!email || !password) { errEl.textContent = "Vui lòng nhập email và mật khẩu."; errEl.style.display = "block"; return; }
+
+  const { data, error } = authMode === "register"
+    ? await supabase.auth.signUp({ email, password, options: { data: { full_name: fullName, role: authRole } } })
+    : await supabase.auth.signInWithPassword({ email, password });
+
+  if (error) { errEl.textContent = error.message; errEl.style.display = "block"; return; }
+
+  if (authMode === "register" && !data.session) {
+    errEl.style.color = "#1e7e34";
+    errEl.textContent = "Đăng ký thành công! Kiểm tra email để xác nhận, sau đó đăng nhập.";
+    errEl.style.display = "block";
+    return;
+  }
+  closeAuthModal();
+}
+
+async function handleSignOut() { await supabase.auth.signOut(); }
 
 const MAX_CREDITS = 30;
 const txt = document.getElementById("txt");
@@ -57,10 +700,10 @@ function getStats() {
     savedWordsList:[], viewedWordsList:[]
   }));
 }
-function saveStats(s) { localStorage.setItem("stats_en8", JSON.stringify(s)); }
+function saveStats(s) { localStorage.setItem("stats_en8", JSON.stringify(s)); syncCreditsToSupabase(s.credits||0); }
 function resetStats() {
   if (!confirm("Reset toàn bộ?")) return;
-  localStorage.removeItem("stats_en8"); renderStats(); updateBadges();
+  localStorage.removeItem("stats_en8"); syncCreditsToSupabase(0); renderStats(); updateBadges();
 }
 function updateStreak(s) {
   const today = new Date().toDateString();
@@ -102,10 +745,10 @@ function renderStats() {
   document.getElementById("sp-streak").textContent = (s.streak||0)+" ngày 🔥";
   document.getElementById("sp-credit-label").textContent = `${s.credits||0}/${MAX_CREDITS}`;
   try{
-    const exams=JSON.parse(localStorage.getItem("saved_exams")||"[]");
-    const done=exams.filter(e=>e.lastScore!=null).length;
+    const exams=mentorExams;
+    const done=exams.filter(e=>e.last_score!=null).length;
     const pending=exams.length-done;
-    const best=done?Math.max(...exams.filter(e=>e.lastScore!=null).map(e=>e.lastScore)):null;
+    const best=done?Math.max(...exams.filter(e=>e.last_score!=null).map(e=>e.last_score)):null;
     const elDone=document.getElementById("sp-exam-done");
     const elPend=document.getElementById("sp-exam-pending");
     const elBest=document.getElementById("sp-exam-best");
@@ -236,6 +879,7 @@ function trackViewedWord(wordKey, lemma, meaning, level) {
     s.viewedWords = (s.viewedWords||0)+1;
     if (s.cefrCounts&&s.cefrCounts[level]!==undefined) s.cefrCounts[level]++;
     saveStats(s); renderStats(); updateBadges();
+    syncViewedWord(wordKey, lemma, meaning, level);
   }
 }
 function toggleSaveWord(wordKey, lemma, meaning, level, btnEl) {
@@ -246,10 +890,12 @@ function toggleSaveWord(wordKey, lemma, meaning, level, btnEl) {
     s.savedWordsList.splice(idx,1);
     s.savedWords = Math.max(0,(s.savedWords||1)-1);
     if (btnEl){btnEl.textContent="☆";btnEl.classList.remove("saved");}
+    syncSavedWordDelete(wordKey);
   } else {
     s.savedWordsList.unshift({key:wordKey,lemma,meaning,level,time:Date.now()});
     s.savedWords = (s.savedWords||0)+1;
     if (btnEl){btnEl.textContent="🌟";btnEl.classList.add("saved");}
+    syncSavedWordUpsert({key:wordKey,lemma,meaning,level});
   }
   saveStats(s); renderStats(); updateBadges();
 }
@@ -274,12 +920,13 @@ function togglePanel(id) {
   if (!panel) { console.error("Panel not found:", id); return; }
   panel.classList.add("open");
   document.querySelectorAll(".sb-btn").forEach(b=>b.classList.remove("active"));
-  const sbMap={pHistory:"sbHistory",pViewed:"sbViewed",pSaved:"sbSaved",pSavedSent:"sbSavedSent"};
+  const sbMap={pHistory:"sbHistory",pViewed:"sbViewed",pSaved:"sbSaved",pSavedSent:"sbSavedSent",pRoster:"sbRoster"};
   if (sbMap[id]) document.getElementById(sbMap[id])?.classList.add("active");
   if (id==="pHistory")    loadHistory();
   if (id==="pViewed")     loadViewedPanel();
   if (id==="pSaved")      loadSavedPanel();
   if (id==="pSavedSent")  loadSavedSentPanel();
+  if (id==="pRoster")     loadRosterPanel();
 }
 function closePanel(resetActive=true) {
   if (currentPanelId) document.getElementById(currentPanelId)?.classList.remove("open");
@@ -368,12 +1015,26 @@ function selectMode(lv) {
   document.getElementById("modeB12").classList.toggle("active", lv==="B2");
   document.getElementById("modeDropdown").classList.remove("open");
 }
-function saveHistory(text, result="") {
+function saveHistory(text, result="", folderId=null) {
   let h = JSON.parse(localStorage.getItem("history_en8")||"[]");
-  h = h.filter(x=>x.text!==text);
   const normLevel = {"A1":"A1","A1-A2":"A1-A2","B1":"B1","B2":"B2"}[currentLevel] || "A1-A2";
-  h.unshift({text, result, time:Date.now(), done:false, level:normLevel});
+  // Khoá xác định trùng lặp = (text, level): cùng text KHÁC level -> nội dung mới,
+  // không đụng bản ghi level cũ. Cùng text CÙNG level -> tái sử dụng time cũ để
+  // upsert Supabase ghi đè đúng vị trí/folder cũ (khoá (mentor_id, client_id)).
+  const existing = h.find(x => x.text === text && (x.level || "A1-A2") === normLevel);
+  const fid = (existing && existing.folderId) || folderId || getDefaultFolderId(normalizeLibLevel(normLevel));
+  const item = {
+    text, result,
+    time: existing ? existing.time : Date.now(),
+    done: existing ? existing.done : false,
+    level: normLevel,
+    customName: existing ? existing.customName : undefined,
+    folderId: fid,
+  };
+  h = h.filter(x => !(x.text === text && (x.level || "A1-A2") === normLevel));
+  h.unshift(item);
   localStorage.setItem("history_en8", JSON.stringify(h.slice(0,100)));
+  syncHistoryUpsert(item);
   updateBadges();
   loadLibrarySidebar();
 }
@@ -388,32 +1049,273 @@ function fmtHistTime(ts) {
   if (d.toDateString() === yesterday) return "hôm qua " + hhmm;
   return `${d.getDate()}/${d.getMonth()+1} ${hhmm}`;
 }
+// ====== Thư viện học tập — giao diện File Explorer (2 cột: cây folder / nội dung) ======
+let libExplorerFolderId = null;
+
+function openLibraryExplorer() {
+  document.getElementById("libraryExplorer").classList.add("open");
+  if (!libExplorerFolderId || !mentorFolders.some(f => f.id === libExplorerFolderId)) {
+    const first = mentorFolders.find(f => f.folder_type === "content" && f.is_auto);
+    libExplorerFolderId = first ? first.id : null;
+  }
+  renderLibExplorerTree();
+  renderLibExplorerList();
+}
+function closeLibraryExplorer() {
+  document.getElementById("libraryExplorer").classList.remove("open");
+}
+function refreshLibraryExplorer() {
+  if (document.getElementById("libraryExplorer")?.classList.contains("open")) {
+    renderLibExplorerTree();
+    renderLibExplorerList();
+  }
+}
+function libExplorerSelect(folderId) {
+  libExplorerFolderId = folderId;
+  renderLibExplorerTree();
+  renderLibExplorerList();
+}
+function toggleLibTreeNode(key) {
+  const el = document.getElementById(key);
+  if (!el) return;
+  const open = el.style.display !== "none";
+  el.style.display = open ? "none" : "block";
+  const arrow = document.getElementById("arrow_"+key);
+  if (arrow) arrow.textContent = open ? "▶" : "▼";
+}
+function renderLibExplorerTree() {
+  const treeEl = document.getElementById("libExplorerTree");
+  if (!treeEl) return;
+  let html = "";
+  ["A1-A2","B1","B2"].forEach(lv => {
+    const folders = mentorFolders.filter(f => (f.folder_type==="content"||f.folder_type==="review") && f.level===lv)
+      .sort((a,b) => (b.is_auto?1:0) - (a.is_auto?1:0));
+    if (!folders.length) return;
+    html += `<div class="lib-tree-level">${lv}</div>`;
+    html += folders.map(f => {
+      const examSub = mentorFolders.find(x => x.parent_folder_id===f.id && x.folder_type==="exam_sub");
+      const selected = f.id===libExplorerFolderId;
+      const fKey = "libf_"+f.id.replace(/[^a-z0-9]/gi,"");
+      let node = `<div class="lib-tree-item${selected?" selected":""}">
+        <span onclick="libExplorerSelect('${f.id}')" style="flex:1;display:flex;align-items:center;gap:6px;min-width:0">
+          ${examSub?`<span class="lib-tree-arrow" onclick="event.stopPropagation();toggleLibTreeNode('${fKey}')" id="arrow_${fKey}">▶</span>`:'<span class="lib-tree-arrow-spacer"></span>'}
+          <span>📁</span><span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${f.name}</span>
+        </span>
+        ${!f.is_auto?`<span class="lib-tree-actions">
+          <button class="lib-tree-act-btn" onclick="event.stopPropagation();renameFolder('${f.id}')" title="Đổi tên">✏️</button>
+          <button class="lib-tree-act-btn" onclick="event.stopPropagation();deleteFolder('${f.id}')" title="Xoá">🗑</button>
+        </span>`:""}
+      </div>`;
+      if (examSub) {
+        const esSelected = examSub.id===libExplorerFolderId;
+        node += `<div id="${fKey}" style="display:none;margin-left:16px">
+          <div class="lib-tree-item${esSelected?" selected":""}" onclick="libExplorerSelect('${examSub.id}')">
+            <span class="lib-tree-arrow-spacer"></span><span>📁</span><span>Đề kiểm tra</span>
+          </div>
+        </div>`;
+      }
+      return node;
+    }).join("");
+  });
+  treeEl.innerHTML = html || '<div class="lib-empty">Chưa có folder nào.</div>';
+}
+function libExplorerBreadcrumb() {
+  const f = mentorFolders.find(x => x.id===libExplorerFolderId);
+  if (!f) return "📚 Thư viện học tập";
+  if (f.folder_type==="exam_sub") {
+    const parent = mentorFolders.find(x => x.id===f.parent_folder_id);
+    return `${f.level} / ${parent?parent.name:""} / Đề kiểm tra`;
+  }
+  return `${f.level} / ${f.name}`;
+}
+function renderLibExplorerList() {
+  const listEl = document.getElementById("libExplorerList");
+  const bcEl = document.getElementById("libBreadcrumb");
+  if (!listEl) return;
+  if (bcEl) bcEl.textContent = libExplorerBreadcrumb();
+  const f = mentorFolders.find(x => x.id===libExplorerFolderId);
+  if (!f) { listEl.innerHTML = '<div class="lib-empty">Chọn 1 folder bên trái để xem nội dung.</div>'; return; }
+
+  const q = (document.getElementById("libSearchInput")?.value||"").trim().toLowerCase();
+  const matches = name => !q || (name||"").toLowerCase().includes(q);
+
+  const h = JSON.parse(localStorage.getItem("history_en8")||"[]");
+  const items = f.folder_type==="exam_sub" ? [] : h.filter(x => x.folderId===f.id && matches(x.customName||x.text));
+  const exams = mentorExams.filter(e => e.folder_id===f.id && matches(e.title));
+
+  if (!items.length && !exams.length) { listEl.innerHTML = '<div class="lib-empty">Trống.</div>'; return; }
+
+  let html = "";
+  items.forEach(x => {
+    html += `<div class="lib-row">
+      <span class="lib-row-icon">📄</span>
+      <span class="lib-row-name" onclick="openHist(${x.time})" title="Nhấn để mở lại">${(x.customName||x.text||"").slice(0,70)}</span>
+      <span class="lib-row-type">Phân tích</span>
+      <span class="lib-row-actions">
+        <button class="lib-act-btn" onclick="renameHistPrompt(${x.time})" title="Đổi tên">✏️</button>
+        <button class="lib-act-btn" onclick="shareHistoryItem(${x.time})" title="Chia sẻ">🔗</button>
+        <button class="lib-act-btn" onclick="openMoveModal('history',${x.time})" title="Di chuyển đến...">➡️</button>
+        <button class="lib-act-btn" onclick="deleteHist(${x.time})" title="Xoá">🗑</button>
+      </span>
+    </div>`;
+  });
+  exams.forEach(e => {
+    const isDe = e.kind==="de";
+    html += `<div class="lib-row">
+      <span class="lib-row-icon">${isDe?"🎓":"📝"}</span>
+      <span class="lib-row-name" onclick="openExam('${e.id}')" title="Nhấn để mở">${e.title}</span>
+      <span class="lib-row-type">${isDe?"Đề":"Bài KT"}${e.last_score!=null?" · "+e.last_score+"%":""}</span>
+      <span class="lib-row-actions">
+        <button class="lib-act-btn" onclick="openExamStats('${e.id}')" title="Thống kê">📊</button>
+        <button class="lib-act-btn" onclick="renameExam('${e.id}')" title="Đổi tên">✏️</button>
+        <button class="lib-act-btn" onclick="openShareModal('exam','${e.id}')" title="Chia sẻ">🔗</button>
+        <button class="lib-act-btn" onclick="openMoveModal('exam','${e.id}')" title="Di chuyển đến...">➡️</button>
+        <button class="lib-act-btn" onclick="deleteExam('${e.id}')" title="Xoá">🗑</button>
+      </span>
+    </div>`;
+  });
+  listEl.innerHTML = html;
+}
+function createFolderInExplorer() {
+  const f = mentorFolders.find(x => x.id===libExplorerFolderId);
+  createFolder(f ? f.level : "A1-A2");
+}
+function renameHistPrompt(ts) {
+  let h = JSON.parse(localStorage.getItem("history_en8")||"[]");
+  const item = h.find(x => x.time===ts);
+  if (!item) return;
+  const current = item.customName || item.text;
+  const name = prompt("Đổi tên:", current);
+  if (!name || !name.trim() || name.trim()===current) return;
+  item.customName = name.trim();
+  localStorage.setItem("history_en8", JSON.stringify(h));
+  syncHistoryUpsert(item);
+  refreshLibraryExplorer();
+}
+async function renameExam(examId) {
+  const e = mentorExams.find(x => x.id===examId);
+  if (!e) return;
+  const name = prompt("Đổi tên đề:", e.title);
+  if (!name || !name.trim() || name.trim()===e.title) return;
+  const { error } = await supabase.from("mentor_exams").update({ title: name.trim() }).eq("id", examId);
+  if (error) { alert("Lỗi đổi tên: "+error.message); return; }
+  e.title = name.trim();
+  refreshLibraryExplorer();
+  if (document.getElementById("savedExamsList")) loadSavedExamsList();
+}
+
+// ---- "Di chuyển đến..." — chỉ cho phép chuyển giữa các folder CÙNG level, để không phá vỡ
+// quy ước hiện có (nội dung/đề luôn hiển thị đúng nhóm level dựa trên level của chính nó) ----
+let _moveTarget = null;
+function openMoveModal(itemType, itemId) {
+  let level, kind;
+  if (itemType==="history") {
+    const h = JSON.parse(localStorage.getItem("history_en8")||"[]");
+    const item = h.find(x => x.time===itemId);
+    if (!item) return;
+    level = normalizeLibLevel(item.level||"A1-A2");
+  } else {
+    const e = mentorExams.find(x => x.id===itemId);
+    if (!e) return;
+    level = e.level; kind = e.kind;
+  }
+  const candidates = (itemType==="history" || kind==="de")
+    ? mentorFolders.filter(f => f.folder_type==="content" && f.level===level && f.id !== libExplorerFolderId)
+    : [];
+  if (!candidates.length) { alert("Không có folder khác để chuyển đến."); return; }
+  _moveTarget = { itemType, itemId, kind };
+  document.getElementById("moveModalList").innerHTML = candidates.map(f =>
+    `<div class="lib-move-option" onclick="confirmMove('${f.id}')">📁 ${f.name}</div>`
+  ).join("");
+  document.getElementById("moveModal").classList.add("open");
+}
+function closeMoveModal() {
+  document.getElementById("moveModal").classList.remove("open");
+  _moveTarget = null;
+}
+async function confirmMove(targetFolderId) {
+  if (!_moveTarget) return;
+  const { itemType, itemId, kind } = _moveTarget;
+  if (itemType==="history") {
+    let h = JSON.parse(localStorage.getItem("history_en8")||"[]");
+    const item = h.find(x => x.time===itemId);
+    if (!item) return;
+    item.folderId = targetFolderId;
+    localStorage.setItem("history_en8", JSON.stringify(h));
+    await syncHistoryUpsert(item);
+  } else {
+    let finalFolderId = targetFolderId;
+    if (kind==="de") finalFolderId = await getOrCreateExamSubFolder(targetFolderId);
+    if (!finalFolderId) { alert("Không xác định được folder đích."); return; }
+    const { error } = await supabase.from("mentor_exams").update({ folder_id: finalFolderId }).eq("id", itemId);
+    if (error) { alert("Lỗi di chuyển: "+error.message); return; }
+    const e = mentorExams.find(x => x.id===itemId);
+    if (e) e.folder_id = finalFolderId;
+  }
+  closeMoveModal();
+  refreshLibraryExplorer();
+}
+
 function loadHistory() {
+  refreshLibraryExplorer();
   const h = JSON.parse(localStorage.getItem("history_en8")||"[]");
   const el = document.getElementById("historyContent");
   if (!el) return;
-  if (!h.length) { el.innerHTML='<div style="color:#aaa;font-size:13px;padding:8px">Chưa có lịch sử</div>'; return; }
-  const groups = {"A1-A2":[], "B1":[], "B2":[]};
-  h.forEach(x => {
-    const lv = x.level || "A1-A2";
-    // A1 and A1-A2 go into same group
-    const mapped = (lv==="A1"||lv==="A1-A2"||lv==="A2") ? "A1-A2"
-      : lv==="B1" ? "B1"
-      : lv==="B2" ? "B2"
-      : "A1-A2";
-    (groups[mapped] || (groups[mapped]=[])).push(x);
-  });
   const lvStyles = {
     "A1-A2":  {color:"#3c763d", bg:"#dff0d8", border:"#a8d5a2", label:"A1-A2"},
     "B1":     {color:"#31708f", bg:"#d9edf7", border:"#9acce0", label:"B1"},
     "B2":     {color:"#8a6d3b", bg:"#fcf8e3", border:"#d4b96a", label:"B2"},
   };
+  const renderItem = x => `
+    <div class="hist-item">
+      <div style="flex:1;min-width:0;cursor:pointer" ondblclick="renameHist(${x.time},this)" title="Double-click để đổi tên">
+        <div class="hist-text${x.done?" done":""}" id="htxt_${x.time}">${(x.customName||x.text).slice(0,50)}</div>
+        <div style="font-size:10px;color:#aaa;margin-top:1px">${fmtHistTime(x.time)}</div>
+      </div>
+      <div class="hist-actions">
+        <button class="hist-btn" onclick="markDone(${x.time})" title="${x.done?"Bỏ hoàn thành":"Hoàn thành"}">${x.done?"✅":"⬜"}</button>
+        <button class="hist-btn" onclick="openHist(${x.time})" title="Mở lại">📄</button>
+        <button class="hist-btn" onclick="shareHistoryItem(${x.time})" title="Chia sẻ">🔗</button>
+        <button class="hist-btn" onclick="deleteHist(${x.time})" title="Xóa" style="color:#dc3545">🗑</button>
+      </div>
+    </div>`;
+
   let html = "";
   ["A1-A2","B1","B2"].forEach(lv => {
-    const items = groups[lv];
-    if (!items || !items.length) return;
+    const levelItems = h.filter(x => normalizeLibLevel(x.level||"A1-A2") === lv);
+    const levelFolders = mentorFolders.filter(f => f.folder_type==="content" && f.level===lv)
+      .sort((a,b) => (b.is_auto?1:0) - (a.is_auto?1:0));
+    if (!levelItems.length && !levelFolders.length) return;
     const st = lvStyles[lv] || {color:"#555",bg:"#eee",border:"#ccc"};
     const gid = "hg_"+lv.replace(/[^a-z0-9]/gi,"");
+
+    let foldersHtml = "";
+    if (levelFolders.length) {
+      foldersHtml = levelFolders.map(f => {
+        const items = levelItems.filter(x => x.folderId === f.id);
+        const fgid = "fg_"+f.id.replace(/[^a-z0-9]/gi,"");
+        const examSub = mentorFolders.find(x => x.parent_folder_id===f.id && x.folder_type==="exam_sub");
+        return `
+        <div style="margin-bottom:4px">
+          <div style="display:flex;align-items:center;gap:6px;padding:5px 8px;background:#fff;border:1px solid #eef2f7;border-radius:6px">
+            <span onclick="toggleHG('${fgid}')" style="cursor:pointer;flex:1;display:flex;align-items:center;gap:6px;min-width:0">
+              <span id="hg_arrow_${fgid}" style="font-size:10px;color:#888;transition:transform .2s">▶</span>
+              <span style="font-size:12px;font-weight:600;color:#0a2540">📁 ${f.name}</span>
+              <span style="font-size:10px;color:#aaa">${items.length} mục${examSub?" · có đề":""}</span>
+            </span>
+            ${!f.is_auto?`
+            <button class="hist-btn" onclick="renameFolder('${f.id}')" title="Đổi tên folder" style="font-size:12px">✏️</button>
+            <button class="hist-btn" onclick="deleteFolder('${f.id}')" title="Xoá folder" style="font-size:12px;color:#dc3545">🗑</button>`:""}
+          </div>
+          <div id="${fgid}" style="display:none;margin-left:14px;padding-left:6px;border-left:2px solid #eef2f7;margin-top:2px">
+            ${items.length ? items.map(renderItem).join("") : '<div style="color:#bbb;font-size:11px;padding:6px 4px">Trống</div>'}
+          </div>
+        </div>`;
+      }).join("");
+    }
+    // Nội dung chưa có folder_id hợp lệ (dữ liệu cũ hoặc chưa đăng nhập) -> hiện ngay dưới level
+    const unassigned = levelItems.filter(x => !levelFolders.some(f => f.id === x.folderId));
+
     html += `
     <div style="margin-bottom:6px">
       <div onclick="toggleHG('${gid}')" style="
@@ -424,25 +1326,75 @@ function loadHistory() {
       ">
         <span id="hg_arrow_${gid}" style="font-size:11px;color:${st.color};transition:transform .2s">▶</span>
         <span style="font-size:12px;font-weight:bold;color:${st.color}">${st.label||lv}</span>
-        <span style="font-size:11px;color:#888;margin-left:2px">${items.length} mục</span>
+        <span style="font-size:11px;color:#888;margin-left:2px">${levelItems.length} mục</span>
       </div>
-      <div id="${gid}" style="display:none;border-left:3px solid ${st.border};margin-left:6px;padding-left:6px;margin-top:2px">
-        ${items.map(x=>`
-        <div class="hist-item">
-          <div style="flex:1;min-width:0;cursor:pointer" ondblclick="renameHist(${x.time},this)" title="Double-click để đổi tên">
-            <div class="hist-text${x.done?" done":""}" id="htxt_${x.time}">${(x.customName||x.text).slice(0,50)}</div>
-            <div style="font-size:10px;color:#aaa;margin-top:1px">${fmtHistTime(x.time)}</div>
-          </div>
-          <div class="hist-actions">
-            <button class="hist-btn" onclick="markDone(${x.time})" title="${x.done?"Bỏ hoàn thành":"Hoàn thành"}">${x.done?"✅":"⬜"}</button>
-            <button class="hist-btn" onclick="openHist(${x.time})" title="Mở lại">📄</button>
-            <button class="hist-btn" onclick="deleteHist(${x.time})" title="Xóa" style="color:#dc3545">🗑</button>
-          </div>
-        </div>`).join("")}
+      <div id="${gid}" style="display:none;border-left:3px solid ${st.border};margin-left:6px;padding-left:6px;margin-top:4px">
+        ${foldersHtml}
+        ${unassigned.map(renderItem).join("")}
+        <button onclick="createFolder('${lv}')" style="width:100%;margin-top:4px;background:#f7fbff;border:1.5px dashed #aed6f1;border-radius:6px;padding:6px;color:#1a5f8a;font-size:11px;cursor:pointer">+ Tạo folder mới (${lv})</button>
       </div>
     </div>`;
   });
-  el.innerHTML = html;
+  el.innerHTML = html || '<div style="color:#aaa;font-size:13px;padding:8px">Chưa có lịch sử</div>';
+}
+
+async function createFolder(level) {
+  if (!(await ensureMentorSession())) { alert("Vui lòng đăng nhập để tạo folder."); return; }
+  const name = prompt("Tên folder mới:");
+  if (!name || !name.trim()) return;
+  const { data, error } = await supabase.from("mentor_folders").insert({
+    mentor_id: currentMentor.id, name: name.trim(), level, folder_type: "content", is_auto: false,
+  }).select().single();
+  if (error) { alert("Lỗi tạo folder: " + error.message); return; }
+  mentorFolders.push(data);
+  loadHistory();
+}
+
+async function renameFolder(folderId) {
+  const f = mentorFolders.find(x => x.id === folderId);
+  if (!f || f.is_auto) return;
+  const name = prompt("Đổi tên folder:", f.name);
+  if (!name || !name.trim() || name.trim() === f.name) return;
+  const { error } = await supabase.from("mentor_folders").update({ name: name.trim() }).eq("id", folderId);
+  if (error) { alert("Lỗi đổi tên: " + error.message); return; }
+  f.name = name.trim();
+  loadHistory();
+}
+
+async function deleteFolder(folderId) {
+  const f = mentorFolders.find(x => x.id === folderId);
+  if (!f) return;
+  if (f.is_auto) { alert("Không thể xoá folder mặc định (Chưa phân loại / Ôn Tập)."); return; }
+  if (!confirm(`Xoá folder "${f.name}"?`)) return;
+
+  const h = JSON.parse(localStorage.getItem("history_en8")||"[]");
+  const itemsInFolder = h.filter(x => x.folderId === folderId);
+  const examSub = mentorFolders.find(x => x.parent_folder_id === folderId && x.folder_type === "exam_sub");
+
+  if (itemsInFolder.length > 0 || examSub) {
+    const deleteAll = confirm(
+      `Folder này có ${itemsInFolder.length} nội dung${examSub ? " và đề bên trong \"Đề kiểm tra\"" : ""}.\n\n` +
+      `Nhấn OK để XOÁ LUÔN tất cả bên trong (không hoàn tác được).\n` +
+      `Nhấn Cancel để CHUYỂN nội dung sang "Chưa phân loại" trước (đề trong "Đề kiểm tra" nếu có vẫn sẽ bị xoá theo folder).`
+    );
+    if (deleteAll) {
+      await Promise.all(itemsInFolder.map(item => syncHistoryDelete(item.time)));
+      const newH = h.filter(x => x.folderId !== folderId);
+      localStorage.setItem("history_en8", JSON.stringify(newH));
+    } else {
+      const defaultId = getDefaultFolderId(f.level);
+      if (!defaultId) { alert("Không tìm thấy folder 'Chưa phân loại' để chuyển nội dung sang."); return; }
+      const movedItems = itemsInFolder.map(x => ({ ...x, folderId: defaultId }));
+      await Promise.all(movedItems.map(item => syncHistoryUpsert(item)));
+      const newH = h.map(x => x.folderId === folderId ? { ...x, folderId: defaultId } : x);
+      localStorage.setItem("history_en8", JSON.stringify(newH));
+    }
+  }
+
+  const { error } = await supabase.from("mentor_folders").delete().eq("id", folderId);
+  if (error) { alert("Lỗi xoá folder: " + error.message); return; }
+  mentorFolders = mentorFolders.filter(x => x.id !== folderId && x.parent_folder_id !== folderId);
+  loadHistory(); updateBadges();
 }
 function renameHist(ts, container) {
   const el = document.getElementById("htxt_"+ts);
@@ -464,6 +1416,7 @@ function renameHist(ts, container) {
     let h = JSON.parse(localStorage.getItem("history_en8")||"[]");
     h = h.map(x => x.time===ts ? {...x, customName:val} : x);
     localStorage.setItem("history_en8", JSON.stringify(h));
+    syncHistoryUpsert(h.find(x=>x.time===ts));
   };
   inp.addEventListener("blur", save);
   inp.addEventListener("keydown", e => {
@@ -482,7 +1435,7 @@ function toggleHG(gid) {
 function markDone(id) {
   let h = JSON.parse(localStorage.getItem("history_en8")||"[]");
   const item = h.find(x=>x.time===id);
-  if (item) { item.done=!item.done; localStorage.setItem("history_en8",JSON.stringify(h)); loadHistory(); }
+  if (item) { item.done=!item.done; localStorage.setItem("history_en8",JSON.stringify(h)); syncHistoryUpsert(item); loadHistory(); }
 }
 function openHist(id) {
   let h = JSON.parse(localStorage.getItem("history_en8")||"[]");
@@ -496,11 +1449,12 @@ function openHist(id) {
 function deleteHist(id) {
   let h = JSON.parse(localStorage.getItem("history_en8")||"[]");
   localStorage.setItem("history_en8", JSON.stringify(h.filter(x=>x.time!==id)));
+  syncHistoryDelete(id);
   loadHistory(); updateBadges();
 }
 function clearHistory() {
   if (!confirm("Xóa toàn bộ lịch sử?")) return;
-  localStorage.removeItem("history_en8"); loadHistory(); updateBadges();
+  localStorage.removeItem("history_en8"); syncHistoryClearAll(); loadHistory(); updateBadges();
 }
 let _delConfirmTimer = null;
 function toggleDeleteDropdown(e) {
@@ -541,18 +1495,21 @@ function confirmDelete(type, el) {
   document.getElementById("deleteDropdown").style.display="none";
   if (type==="hist") {
     localStorage.removeItem("history_en8");
+    syncHistoryClearAll();
     if (document.getElementById("pHistory")?.classList.contains("open")) loadHistory();
   } else if (type==="viewed") {
     const s=getStats(); s.viewedWordsList=[]; s.viewedWords=0; saveStats(s);
     if (document.getElementById("pViewed")?.classList.contains("open")) loadViewedPanel();
   } else if (type==="saved") {
     const s=getStats(); s.savedWordsList=[]; s.savedWords=0; saveStats(s);
+    syncSavedWordsClearAll();
     if (document.getElementById("pSaved")?.classList.contains("open")) loadSavedPanel();
   } else if (type==="sent") {
     const s=getStats(); s.savedSentList=[]; saveStats(s);
     if (document.getElementById("pSavedSent")?.classList.contains("open")) loadSavedSentPanel();
   } else if (type==="all") {
     ["history_en8","stats_en8"].forEach(k=>localStorage.removeItem(k));
+    syncHistoryClearAll(); syncSavedWordsClearAll(); syncCreditsToSupabase(0);
     out.innerHTML=""; txt.value="";
     renderStats(); loadHistory();
   }
@@ -564,8 +1521,6 @@ document.addEventListener("click", e=>{
     dd.style.display="none";
   }
 });
-function showLogin() { alert("Tính năng đăng nhập sẽ có trong phiên bản chính thức."); }
-function showRegister() { alert("Tính năng đăng ký sẽ có trong phiên bản chính thức.\n\nGói Go và Pro sẽ cung cấp nhiều tính năng nâng cao."); }
 let _voices=[], _voiceFem=null, _voiceMal=null;
 let isListeningAll=false, isRepeat=false, currentPlayUid=null;
 function loadVoices(){
@@ -661,9 +1616,12 @@ function toggleCardAudio(uid, sentence, si) {
     playSentence(sentence, spName, ()=>{
       currentPlayUid=null;
       const s=getStats();
+      const sec=Math.round(sentence.split(/\s+/).length/130*60);
       s.listenCount=(s.listenCount||0)+1;
-      s.totalListenSec=(s.totalListenSec||0)+Math.round(sentence.split(/\s+/).length/130*60);
+      s.totalListenSec=(s.totalListenSec||0)+sec;
       saveStats(s);renderStats();
+      const contentId=getCurrentHistorySupabaseId();
+      if(contentId)syncListenStats(contentId, sec);
     });
   },80);
 }
@@ -2362,72 +3320,118 @@ function toggleA2Chunk(id) {
 }
 function openTest(){document.getElementById("testOverlay").classList.add("open");buildCurrentTest();}
 function closeTest(){document.getElementById("testOverlay").classList.remove("open");}
-let _testLevel="all";
 let _examType="ielts";
+let _examKind="de"; // 'de' (theo 1 folder cụ thể) | 'bai_kiem_tra' (hiện tại/từ đã lưu/từ đã tra/câu đã lưu)
+let _examFolderId=null;
 function setExamType(t){
   _examType=t;
   document.querySelectorAll("[data-exam]").forEach(b=>b.classList.toggle("active",b.dataset.exam===t));
   updateExamCreditInfo();
 }
-function setTestSource(src){
-  document.querySelectorAll("[data-src]").forEach(b=>b.classList.toggle("active",b.dataset.src===src));
-  const lf=document.getElementById("testLevelFilter");
-  if(lf)lf.style.display=src==="history"?"flex":"none";
+function setExamKind(kind){
+  _examKind=kind;
+  document.querySelectorAll("[data-kind]").forEach(b=>b.classList.toggle("active",b.dataset.kind===kind));
+  const typeRow=document.getElementById("examTypeRow");
+  const folderRow=document.getElementById("examSourceFolderRow");
+  const srcRow=document.getElementById("examSourceButtonsRow");
+  if(typeRow)typeRow.style.display=kind==="de"?"flex":"none";
+  if(folderRow)folderRow.style.display=kind==="de"?"flex":"none";
+  if(srcRow)srcRow.style.display=kind==="bai_kiem_tra"?"flex":"none";
+  if(kind==="de")populateExamFolderSelect();
   updateExamCreditInfo();
 }
-function setTestLevel(lv){
-  _testLevel=lv;
-  document.querySelectorAll(".test-lv-btn").forEach(b=>b.classList.toggle("active",b.dataset.lv===lv));
+function populateExamFolderSelect(){
+  const sel=document.getElementById("examFolderSelect");
+  if(!sel)return;
+  const folders=mentorFolders.filter(f=>f.folder_type==="content");
+  if(!folders.length){sel.innerHTML='<option value="">(chưa có folder nào)</option>';_examFolderId=null;return;}
+  sel.innerHTML=folders.map(f=>`<option value="${f.id}">${f.name} (${f.level})</option>`).join("");
+  _examFolderId=folders[0].id;
+  sel.value=_examFolderId;
+}
+function onExamFolderChange(){
+  const sel=document.getElementById("examFolderSelect");
+  _examFolderId=sel?.value||null;
+  updateExamCreditInfo();
+}
+function setTestSource(src){
+  document.querySelectorAll("[data-src]").forEach(b=>b.classList.toggle("active",b.dataset.src===src));
   updateExamCreditInfo();
 }
 function updateExamCreditInfo(){
   const el=document.getElementById("examCreditInfo");
   if(!el)return;
-  const src=document.querySelector("[data-src].active")?.dataset.src||"current";
-  const pool=collectPool(src);
-  const domLevel=getDomLevel(pool)||"B1";
-  const N=domLevel==="A1-A2"?10:30;
-  const creditCost=5;
+  const creditCost=10;
   const s=getStats();
   const avail=(s.credits||0);
   const canAfford=avail>=creditCost;
-  el.innerHTML=`💡 Đề <b>${_examType==="ptth"?"PTTH":"IELTS"}</b> · Level <b>${domLevel}</b> · <b>${N} câu</b> (4 kỹ năng)<br>
-    💳 Chi phí: <b>${creditCost} credit</b> · Số dư: <b style="color:${canAfford?"#1e7e34":"#c0392b"}">${avail} credit</b>
-    ${!canAfford?'<br>🔴 <span style="color:#c0392b;font-weight:700">Hết credit. Vui lòng nạp thêm credit.</span>':""}`;
   const btn=document.getElementById("btnCreateExam");
-  if(btn)btn.disabled=!canAfford;
+
+  if(_examKind==="de"){
+    const folder=mentorFolders.find(f=>f.id===_examFolderId);
+    const domLevel=folder?folder.level:"B1";
+    const N=domLevel==="A1-A2"?10:30;
+    const MIN_SAVED_CONTENT=10;
+    const savedCount=_examFolderId?countHistoryInFolder(_examFolderId):0;
+    const hasEnoughContent=savedCount>=MIN_SAVED_CONTENT;
+    el.innerHTML=`💡 Đề <b>${_examType==="ptth"?"PTTH":"IELTS"}</b> · Level <b>${domLevel}</b> · <b>${N} câu</b> (4 kỹ năng)<br>
+      💳 Chi phí: <b>${creditCost} credit</b> · Số dư: <b style="color:${canAfford?"#1e7e34":"#c0392b"}">${avail} credit</b><br>
+      📚 Nội dung trong folder: <b style="color:${hasEnoughContent?"#1e7e34":"#c0392b"}">${savedCount}/${MIN_SAVED_CONTENT}</b>
+      ${!canAfford?'<br>🔴 <span style="color:#c0392b;font-weight:700">Hết credit. Vui lòng nạp thêm credit.</span>':""}
+      ${!hasEnoughContent?'<br>🔒 <span style="color:#c0392b;font-weight:700">Chưa đủ nội dung trong folder này.</span>':""}`;
+    if(btn)btn.disabled=!canAfford||!hasEnoughContent||!_examFolderId;
+  } else {
+    const src=document.querySelector("[data-src].active")?.dataset.src||"current";
+    const pool=collectPool(src);
+    const domLevel=getDomLevel(pool)||"B1";
+    const N=domLevel==="A1-A2"?10:30;
+    el.innerHTML=`💡 Bài kiểm tra từ vựng · Level <b>${domLevel}</b> · <b>${N} câu</b><br>
+      💳 Chi phí: <b>${creditCost} credit</b> · Số dư: <b style="color:${canAfford?"#1e7e34":"#c0392b"}">${avail} credit</b>
+      ${!canAfford?'<br>🔴 <span style="color:#c0392b;font-weight:700">Hết credit. Vui lòng nạp thêm credit.</span>':""}`;
+    if(btn)btn.disabled=!canAfford;
+  }
   loadSavedExamsList();
 }
 function getDomLevel(pool){
   const lv={};pool.forEach(w=>{if(w.level)lv[w.level]=(lv[w.level]||0)+1;});
   return Object.entries(lv).sort((a,b)=>b[1]-a[1])[0]?.[0]||"B1";
 }
+function normalizeLibLevel(lv){
+  return (lv==="A1"||lv==="A1-A2"||lv==="A2") ? "A1-A2"
+    : lv==="B1" ? "B1"
+    : lv==="B2" ? "B2"
+    : "A1-A2";
+}
+function countHistoryInFolder(folderId){
+  const h=JSON.parse(localStorage.getItem("history_en8")||"[]");
+  return h.filter(x=>x.folderId===folderId).length;
+}
 function loadSavedExamsList(){
   const el=document.getElementById("savedExamsList");
   if(!el)return;
-  const exams=JSON.parse(localStorage.getItem("saved_exams")||"[]");
-  if(!exams.length){el.innerHTML='<div style="color:#aaa;font-size:12px;padding:4px 0">Chưa có đề nào. Nhấn "Tạo đề mới" để bắt đầu.</div>';return;}
-  const LV_COL={A1:"#3c763d",A2:"#31708f","B2":"#8a6d3b"};
-  el.innerHTML=exams.slice().reverse().map(e=>`
-    <div style="display:flex;align-items:center;gap:8px;padding:7px 0;border-bottom:1px solid #eff2f7;cursor:pointer" onclick="openExam('${e.key}')">
+  if(!mentorExams.length){el.innerHTML='<div style="color:#aaa;font-size:12px;padding:4px 0">Chưa có đề nào. Nhấn "Tạo đề mới" để bắt đầu.</div>';return;}
+  const LV_COL={"A1-A2":"#3c763d","B1":"#31708f","B2":"#8a6d3b"};
+  el.innerHTML=mentorExams.map(e=>`
+    <div style="display:flex;align-items:center;gap:8px;padding:7px 0;border-bottom:1px solid #eff2f7;cursor:pointer" onclick="openExam('${e.id}')">
       <div style="flex:1;min-width:0">
         <div style="font-size:12px;font-weight:600;color:#1a3c6e;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${e.title}</div>
-        <div style="font-size:10px;color:#888;margin-top:2px">${new Date(e.created).toLocaleDateString("vi-VN")} · ${e.questions} câu${e.lastScore!=null?" · Điểm: "+e.lastScore+"%":""}</div>
+        <div style="font-size:10px;color:#888;margin-top:2px">${new Date(e.created_at).toLocaleDateString("vi-VN")} · ${e.questions_count} câu${e.last_score!=null?" · Điểm: "+e.last_score+"%":""}</div>
       </div>
       <span style="padding:2px 7px;border-radius:3px;font-size:10px;font-weight:700;color:#fff;background:${LV_COL[e.level]||"#555"};flex-shrink:0">${e.level}</span>
-      <button onclick="event.stopPropagation();deleteExam('${e.key}')" style="background:none;border:none;cursor:pointer;color:#aaa;font-size:14px;padding:0 4px;flex-shrink:0" title="Xóa">🗑</button>
+      <button onclick="event.stopPropagation();openExamStats('${e.id}')" style="background:none;border:none;cursor:pointer;color:#aaa;font-size:14px;padding:0 4px;flex-shrink:0" title="Thống kê">📊</button>
+      <button onclick="event.stopPropagation();openShareModal('exam','${e.id}')" style="background:none;border:none;cursor:pointer;color:#aaa;font-size:14px;padding:0 4px;flex-shrink:0" title="Chia sẻ">🔗</button>
+      <button onclick="event.stopPropagation();deleteExam('${e.id}')" style="background:none;border:none;cursor:pointer;color:#aaa;font-size:14px;padding:0 4px;flex-shrink:0" title="Xóa">🗑</button>
     </div>`).join("");
 }
-function openExam(key){
+function openExam(examId){
   closeTest();
-  examOpen(key);
+  examOpen(examId);
 }
-function deleteExam(key){
+async function deleteExam(examId){
   if(!confirm("Xóa đề này?"))return;
-  localStorage.removeItem("exam_"+key);
-  let exams=JSON.parse(localStorage.getItem("saved_exams")||"[]");
-  exams=exams.filter(e=>e.key!==key);
-  localStorage.setItem("saved_exams",JSON.stringify(exams));
+  const { error } = await supabase.from("mentor_exams").delete().eq("id", examId);
+  if (error) { alert("Lỗi xoá đề: "+error.message); return; }
+  mentorExams = mentorExams.filter(e=>e.id!==examId);
   loadSavedExamsList();
 }
 function collectPool(src){
@@ -2453,49 +3457,69 @@ function collectPool(src){
   } else if(src==="viewed"){
     (getStats().viewedWordsList||[]).filter(w=>!isViet(w.lemma||w.key))
       .forEach(w=>pool.push({word:w.lemma||w.key,display:w.lemma||w.key,meaning:w.meaning,level:w.level||"",grammar:"",sentence:"",example:""}));
-  } else if(src==="history"){
-    const h=JSON.parse(localStorage.getItem("history_en8")||"[]");
-    const filtered=_testLevel==="all"?h:h.filter(x=>{const lv=(x.level==="A1-A2"?"A1-A2":x.level)||"A1-A2";return lv===_testLevel;});
-    filtered.slice(0,30).forEach(item=>{
-      if(item.result){
-        const tmp=document.createElement("div");tmp.innerHTML=item.result;
-        tmp.querySelectorAll("[data-meaning]").forEach(el=>{
-          const w=el.dataset?.lemma||el.dataset?.key||"";
-          const m=el.dataset?.meaning||"";
-          if(w&&m&&w.length>1&&!isViet(w))
-            pool.push({word:w,display:w,meaning:m,level:el.dataset?.level||item.level||"",grammar:"",sentence:item.text||"",example:""});
-        });
-      }
-    });
-    if(!pool.length){
-      const lv=_testLevel==="all"?null:_testLevel;
-      (getStats().savedWordsList||[]).filter(w=>!isViet(w.lemma||w.key)&&(!lv||w.level===lv))
-        .forEach(w=>pool.push({word:w.lemma||w.key,display:w.lemma||w.key,meaning:w.meaning,level:w.level||"",grammar:"",sentence:"",example:""}));
-    }
+  } else if(src==="sent"){
+    (getStats().savedSentList||[]).filter(x=>x.text&&!isViet(x.text))
+      .forEach(x=>pool.push({word:x.text,display:x.text,meaning:"",level:"",grammar:"",sentence:x.text,example:""}));
   }
   const seen=new Set();
   return pool.filter(w=>{const k=w.word.toLowerCase();if(seen.has(k))return false;seen.add(k);return true;});
 }
-function confirmCreateExam(){
-const examSrc=document.querySelector("[data-src].active")?.dataset.src||"current";
-const pool=collectPool(examSrc);
-const isVocab=(examSrc==="current"||examSrc==="viewed"||examSrc==="saved");
-const modeLabel=isVocab?"Bài ôn từ vựng":_examType==="ptth"?"PTTH":"IELTS";
-if(pool.length<5){alert("Cần ít nhất 5 từ/cụm. Phân tích thêm nội dung.");return;}
-const domLevel=getDomLevel(pool)||"B1";
-const N=domLevel==="A1-A2"?10:30;
-const creditCost=5;
-const s=getStats();
-if(false&&(s.credits||0)<creditCost){alert("🔴 Hết credit. Vui lòng nạp thêm credit.");return;}
-if(!confirm(`Tạo ${modeLabel} (${N} câu, level ${domLevel})?\nTốn: ${creditCost} credit | Số dư: ${s.credits||0}`))return;
-s.credits=(s.credits||0)-creditCost;
-saveStats(s);renderStats();
-closeTest();
-createExamWithAI(pool,domLevel,N);
+function collectPoolFromFolder(folderId){
+  function isViet(s){return /[àáạảãâầấậẩẫăằắặẳẵèéẹẻẽêềếệểễìíịỉĩòóọỏõôồốộổỗơờớợởỡùúụủũưừứựửữỳýỵỷỹđ]/i.test(s||"");}
+  const h=JSON.parse(localStorage.getItem("history_en8")||"[]").filter(x=>x.folderId===folderId);
+  let pool=[];
+  h.slice(0,50).forEach(item=>{
+    if(item.result){
+      const tmp=document.createElement("div");tmp.innerHTML=item.result;
+      tmp.querySelectorAll("[data-meaning]").forEach(el=>{
+        const w=el.dataset?.lemma||el.dataset?.key||"";
+        const m=el.dataset?.meaning||"";
+        if(w&&m&&w.length>1&&!isViet(w))
+          pool.push({word:w,display:w,meaning:m,level:el.dataset?.level||item.level||"",grammar:"",sentence:item.text||"",example:""});
+      });
+    }
+  });
+  const seen=new Set();
+  return pool.filter(w=>{const k=w.word.toLowerCase();if(seen.has(k))return false;seen.add(k);return true;});
 }
-async function createExamWithAI(pool,domLevel,N){
-const examSrc=document.querySelector("[data-src].active")?.dataset.src||"current";
-const isVocab=(examSrc==="current"||examSrc==="viewed"||examSrc==="saved");
+function confirmCreateExam(){
+const creditCost=10;
+const s=getStats();
+if((s.credits||0)<creditCost){alert("🔴 Hết credit. Vui lòng nạp thêm credit.");return;}
+
+if(_examKind==="de"){
+  if(!_examFolderId){alert("Vui lòng chọn 1 folder.");return;}
+  const folder=mentorFolders.find(f=>f.id===_examFolderId);
+  if(!folder){alert("Folder không hợp lệ.");return;}
+  const MIN_SAVED_CONTENT=10;
+  const savedCount=countHistoryInFolder(_examFolderId);
+  if(savedCount<MIN_SAVED_CONTENT){alert(`🔒 Cần ít nhất ${MIN_SAVED_CONTENT} nội dung trong folder "${folder.name}" mới được tạo đề (hiện có ${savedCount}). Hãy phân tích và lưu thêm nội dung vào folder này.`);return;}
+  const pool=collectPoolFromFolder(_examFolderId);
+  if(pool.length<5){alert("Cần ít nhất 5 từ/cụm trong folder này. Phân tích thêm nội dung.");return;}
+  const domLevel=folder.level;
+  const N=domLevel==="A1-A2"?10:30;
+  const modeLabel=_examType==="ptth"?"PTTH":"IELTS";
+  if(!confirm(`Tạo đề ${modeLabel} (${N} câu, level ${domLevel}) từ folder "${folder.name}"?\nTốn: ${creditCost} credit | Số dư: ${s.credits||0}`))return;
+  s.credits=(s.credits||0)-creditCost;
+  saveStats(s);renderStats();
+  closeTest();
+  createExamWithAI(pool,domLevel,N,{kind:"de",folderId:_examFolderId});
+} else {
+  const examSrc=document.querySelector("[data-src].active")?.dataset.src||"current";
+  const pool=collectPool(examSrc);
+  if(pool.length<5){alert("Cần ít nhất 5 từ/cụm. Phân tích thêm nội dung.");return;}
+  const domLevel=getDomLevel(pool)||"B1";
+  const N=domLevel==="A1-A2"?10:30;
+  if(!confirm(`Tạo bài ôn từ vựng (${N} câu, level ${domLevel})?\nTốn: ${creditCost} credit | Số dư: ${s.credits||0}`))return;
+  s.credits=(s.credits||0)-creditCost;
+  saveStats(s);renderStats();
+  closeTest();
+  const reviewFolderId=getReviewFolderId(normalizeLibLevel(domLevel));
+  createExamWithAI(pool,domLevel,N,{kind:"bai_kiem_tra",folderId:reviewFolderId});
+}
+}
+async function createExamWithAI(pool,domLevel,N,meta){
+const isVocab=meta.kind==="bai_kiem_tra";
 const isIELTS=!isVocab&&_examType==="ielts";
 const isPTTH=!isVocab&&_examType==="ptth";
 const duration=isIELTS?60:isPTTH?45:30;
@@ -2507,7 +3531,6 @@ const setStatus=(msg)=>{statusDiv.innerHTML=msg;};
 const sampleWords=pool.sort(()=>Math.random()-.5).slice(0,50);
 const sentences=[...new Set(pool.map(w=>w.sentence).filter(s=>s&&s.length>15))].slice(0,12);
 const wordList=sampleWords.slice(0,40).map(w=>`"${w.display}"(${w.meaning})${w.grammar?`[${w.grammar}]`:""}`).join(", ");
-const key="exam_"+Date.now();
 // Gọi qua Worker (action generate_exam_legacy) — API key + model nằm ở server, frontend không thấy.
 const callAPI=async(prompt,tok=3200)=>{
   const r=await fetch(WORKER_URL,{
@@ -2751,83 +3774,111 @@ JSON RULES: mcq=4opts, gap_fill=[BLANK]+4opts or no opts (type-in), tfng=no opts
 Return ONLY JSON: {"name":"${pd.name}","sections":[{"title":"${pd.sectionTitle}","instruction":"${pd.instruction}","passage":${pd.needsPassage?'"Write an 8-sentence English passage on topic from student data. Use varied sentence structures."':"null"},"passageTitle":${pd.needsPassage?'"Đọc hiểu"':"null"},"questions":[{"num":1,"type":"TYPE","question":"...","passage_ref":null,"options":["A. ...","B. ...","C. ...","D. ..."],"correct":"A","correct_text":"...","audio_text":null,"explanation":"Giải thích tiếng Việt — đáp án + lý do + quy tắc"}]}]}`;
 
 const mkPart=isIELTS?mkIELTS:mkPTTH;
+// domLevel B1/B2 -> mỗi phần 10 câu (tổng 40) thay vì 8/8/7/7 (tổng 30) của A1-A2.
+// CHỈ áp dụng cho "Đề" (nhánh isIELTS/isPTTH này) — nhánh "Bài Kiểm Tra" (isVocab) ở
+// trên KHÔNG đụng tới. Thời gian làm bài (duration) giữ nguyên không đổi.
+const isHigherLevel=domLevel==="B1"||domLevel==="B2";
 const partDefs=isIELTS?[
-{name:"Part 1: Vocabulary & Grammar",count:8,sectionTitle:"VOCABULARY AND GRAMMAR",
+{name:"Part 1: Vocabulary & Grammar",count:isHigherLevel?10:8,sectionTitle:"VOCABULARY AND GRAMMAR",
 instruction:"Choose the best answer A, B, C or D for each question.",
 types:"mcq",needsPassage:false,isListen:false,
-instructions:`All 8 questions are type="mcq" with 4 options. NO [BLANK] in questions — ask directly.
+instructions:`All ${isHigherLevel?10:8} questions are type="mcq" with 4 options. NO [BLANK] in questions — ask directly.
 Q1-2: Vocabulary meaning/usage — "In the sentence '...', the word '___' is closest in meaning to:" or "Which sentence uses '[word]' correctly?"
 Q3-4: Tense choice — "She _____ in this city for ten years." then give 4 tense options A/B/C/D (no [BLANK], just the stem sentence then options)
 Q5-6: Error identification — Show full sentence with 4 parts underlined using <u>text</u> tags. Ask "Which underlined part (A, B, C or D) contains an error?" Then provide options: A.[underlined text A] B.[underlined text B] C.[underlined text C] D.[underlined text D]. correct=the letter of the wrong part. NEVER put (A)(B)(C)(D) inline in the sentence — use <u> tags instead. Example: question="She <u>has went</u> to <u>the market</u> <u>every day</u> <u>last week</u>. Which part has an error?" options=["A. has went","B. the market","C. every day","D. last week"] correct="A"
 Q7: Word form — "(BUILD) The _____ of the new bridge took two years." 4 form options
-Q8: Collocation/phrasal verb — "The meeting was called _____ at the last minute." 4 preposition options`},
-{name:"Part 2: Reading Comprehension",count:8,sectionTitle:"READING COMPREHENSION",
+Q8: Collocation/phrasal verb — "The meeting was called _____ at the last minute." 4 preposition options${isHigherLevel?`
+Q9: SECOND vocabulary meaning/usage item — same format as Q1-2, use a DIFFERENT word from student data.
+Q10: SECOND word-form item — same format as Q7, use a DIFFERENT word from student data.`:""}`},
+{name:"Part 2: Reading Comprehension",count:isHigherLevel?10:8,sectionTitle:"READING COMPREHENSION",
 instruction:"Read the passage carefully and answer the questions.",
 types:"mcq|tfng|gap_fill",needsPassage:true,isListen:false,
-instructions:`Write a 6-8 sentence ENGLISH passage. Then 8 questions:
+instructions:`Write a ${isHigherLevel?"8-10":"6-8"} sentence ENGLISH passage. Then ${isHigherLevel?10:8} questions:
 Q1-3: type="mcq", 4 options, NO [BLANK] — ask about passage meaning/inference
 Q4-5: type="tfng", passage_ref=relevant sentence, options=[], correct="True"/"False"/"Not Given"
 Q6-7: type="gap_fill", sentence with [BLANK], 4 options (grammar test), correct=letter
-Q8: type="mcq", vocabulary in context, 4 English meaning options`},
-{name:"Part 3: Listening Practice",count:7,sectionTitle:"LISTENING COMPREHENSION",
+Q8: type="mcq", vocabulary in context, 4 English meaning options${isHigherLevel?`
+Q9: type="mcq", detail question — ask about a specific fact stated in the passage, 4 options, NO [BLANK]
+Q10: type="tfng", a SECOND paraphrased statement (different from Q4-5), options=[], correct="True"/"False"/"Not Given"`:""}`},
+{name:"Part 3: Listening Practice",count:isHigherLevel?10:7,sectionTitle:"LISTENING COMPREHENSION",
 instruction:"Listen to the audio and answer the questions. Press Play to listen.",
 types:"listening",needsPassage:false,isListen:true,
-instructions:`ALL 7 questions: type="listening". EVERY question MUST have audio_text (complete English sentence, 10+ words). passage_ref=null always.
+instructions:`ALL ${isHigherLevel?10:7} questions: type="listening". EVERY question MUST have audio_text (complete English sentence, 10+ words). passage_ref=null always.
 
-${domLevel==="B2"?`B1-B2 FORMAT — ONE shared audio for ALL 7 questions:
-Write ONE rich audio passage (4-6 sentences, 60-80 words) covering vocabulary from student data.
+${domLevel==="B2"?`B1-B2 FORMAT — ONE shared audio for ALL ${isHigherLevel?10:7} questions:
+Write ONE rich audio passage (${isHigherLevel?"6-8":"4-6"} sentences, ${isHigherLevel?"90-120":"60-80"} words) covering vocabulary from student data.
 Set this SAME text as audio_text on EVERY question.
-Create 7 different questions all about THIS ONE audio:
-- 3x comprehension MCQ: "According to the audio..." / "What does the speaker mention about...?"
+Create ${isHigherLevel?10:7} different questions all about THIS ONE audio:
+- ${isHigherLevel?6:3}x comprehension MCQ: "According to the audio..." / "What does the speaker mention about...?"
 - 2x inference MCQ: "What can we infer from the audio?" / "Why does the speaker say...?"
 - 1x T/F/NG: statement about audio content, options=[], correct="True"/"False"/"Not Given"
 - 1x gap from audio: "The speaker says the ___ is important", 4 word options`:`A1/A2 FORMAT — Each question has its OWN SHORT audio:
 Each audio_text = 1 simple sentence (10-15 words) from student data.
 Every question uses a DIFFERENT audio_text.
-Types: comprehension MCQ (what does the speaker say?), T/F about audio, gap from audio.`}
+Types: comprehension MCQ (what does the speaker say?), T/F about audio, gap from audio.${isHigherLevel?" Repeat this same mix of types to reach the required total.":""}`}
 
 ALL questions: audio_text NEVER null/empty. Question text must NOT reveal the audio answer.`},
-{name:"Part 4: Writing Skills",count:7,sectionTitle:"WRITING SKILLS",
+{name:"Part 4: Writing Skills",count:isHigherLevel?10:7,sectionTitle:"WRITING SKILLS",
 instruction:"Complete the writing tasks below. Write your answers in English.",
 types:"word_order|writing",needsPassage:false,isListen:false,
-instructions:"7 questions. NO MCQ. Use student's ACTUAL sentences from data.\nQ1-2: type=word_order. Take an actual sentence from student data (6+ words), scramble it. correct=original sentence. options=[].\nQ3: type=writing. 'Rewrite using ALTHOUGH: [actual sentence from data]'. correct=open. options=[].\nQ4: type=writing. 'Rewrite using DESPITE/BECAUSE/SO THAT: [another sentence]'. correct=open. options=[].\nQ5: type=writing. 'Translate to English: [Vietnamese version of a student sentence]'. correct=open. options=[].\nQ6: type=writing. 'Write 2-3 sentences about [topic from data] using: [3 vocab words]'. correct=open. options=[].\nQ7: type=writing. 'Complete this sentence: [partial sentence from data] ___'. correct=open. options=[].\nAll explanations show model answer in Vietnamese."}
+instructions:`${isHigherLevel?10:7} questions. NO MCQ. Use student's ACTUAL sentences from data.
+Q1-2: type=word_order. Take an actual sentence from student data (6+ words), scramble it. correct=original sentence. options=[].
+Q3: type=writing. 'Rewrite using ALTHOUGH: [actual sentence from data]'. correct=open. options=[].
+Q4: type=writing. 'Rewrite using DESPITE/BECAUSE/SO THAT: [another sentence]'. correct=open. options=[].
+Q5: type=writing. 'Translate to English: [Vietnamese version of a student sentence]'. correct=open. options=[].
+Q6: type=writing. 'Write 2-3 sentences about [topic from data] using: [3 vocab words]'. correct=open. options=[].
+Q7: type=writing. 'Complete this sentence: [partial sentence from data] ___'. correct=open. options=[].${isHigherLevel?`
+Q8: type=word_order. Take ANOTHER actual sentence from student data (different from Q1-2, 6+ words), scramble it. correct=original sentence. options=[].
+Q9: type=writing. 'Rewrite using SO...THAT/SUCH...THAT: [another sentence from data]'. correct=open. options=[].
+Q10: type=writing. 'Write 2-3 sentences about [a DIFFERENT topic from data] using: [3 different vocab words]'. correct=open. options=[].`:""}
+All explanations show model answer in Vietnamese.`}
 ]:[
 // ── PTTH (THPT Quốc Gia) partDefs ──────────────────────────
-{name:"Phần 1: Ngữ âm & Từ vựng",count:8,sectionTitle:"PHONETICS AND VOCABULARY",
+{name:"Phần 1: Ngữ âm & Từ vựng",count:isHigherLevel?10:8,sectionTitle:"PHONETICS AND VOCABULARY",
 instruction:"Choose the best answer A, B, C or D to complete each sentence.",
 types:"mcq",needsPassage:false,isListen:false,
-instructions:`8 questions, all type="mcq", 4 options, NO [BLANK].
+instructions:`${isHigherLevel?10:8} questions, all type="mcq", 4 options, NO [BLANK].
 Q1: Phát âm — "Which word has the underlined part pronounced DIFFERENTLY from the others?" Use vocabulary from data. Underline with <u>letters</u>. 4 words as options.
 Q2: Trọng âm — "Which word has a DIFFERENT stress pattern from the others?" 4 words, mark stress with '.
 Q3-5: Từ vựng điền vào câu — Complete the sentence: "[sentence using vocabulary context]" A.[word] B.[word] C.[word] D.[word] — Test meaning/collocation.
 Q6-7: Dạng từ — "(BUILD) The _____ of the new school was completed last year." 4 word forms.
-Q8: Phrasal verb/collocation — from student vocabulary, test collocation or phrasal verb.`},
-{name:"Phần 2: Ngữ pháp & Cấu trúc",count:8,sectionTitle:"GRAMMAR",
+Q8: Phrasal verb/collocation — from student vocabulary, test collocation or phrasal verb.${isHigherLevel?`
+Q9: Từ vựng điền vào câu — thêm 1 câu tương tự Q3-5, dùng từ vựng KHÁC trong data.
+Q10: Dạng từ — thêm 1 câu tương tự Q6-7, dùng từ gốc KHÁC.`:""}`},
+{name:"Phần 2: Ngữ pháp & Cấu trúc",count:isHigherLevel?10:8,sectionTitle:"GRAMMAR",
 instruction:"Choose the best answer A, B, C or D for each question.",
 types:"mcq",needsPassage:false,isListen:false,
-instructions:`8 questions, all type="mcq", 4 options, NO [BLANK] in question text.
+instructions:`${isHigherLevel?10:8} questions, all type="mcq", 4 options, NO [BLANK] in question text.
 Q1-3: Thì động từ — Sentence using student vocabulary, ask which tense is correct. Options are 4 different tenses.
 Example: "By the time she arrived, they ______ for an hour." A.wait B.waited C.had been waiting D.have waited
 Q4-5: Phát hiện lỗi — Full sentence with 4 parts underlined using <u>tags</u>. Provide 4 options listing the underlined parts. correct=wrong letter. Example: question="She <u>has went</u> to <u>the market</u> <u>every day</u> <u>last week</u>." options=["A. has went","B. the market","C. every day","D. last week"] correct="A". NEVER use (A)(B) inline.
 Q6-7: Viết lại câu — "He is too old to run." → "He is so old ______" + 4 complete sentence options.
-Q8: Câu điều kiện/bị động/mệnh đề quan hệ — test one structure using student vocabulary.`},
-{name:"Phần 3: Đọc hiểu",count:7,sectionTitle:"READING COMPREHENSION",
+Q8: Câu điều kiện/bị động/mệnh đề quan hệ — test one structure using student vocabulary.${isHigherLevel?`
+Q9: Thì động từ — thêm 1 câu tương tự Q1-3, dùng ngữ cảnh KHÁC.
+Q10: Câu điều kiện/bị động/mệnh đề quan hệ — thêm 1 câu, test cấu trúc KHÁC Q8.`:""}`},
+{name:"Phần 3: Đọc hiểu",count:isHigherLevel?10:7,sectionTitle:"READING COMPREHENSION",
 instruction:"Read the passage and answer the questions.",
 types:"mcq|gap_fill",needsPassage:true,isListen:false,
-instructions:`Write a 6-8 sentence English passage. Then 7 questions:
+instructions:`Write a ${isHigherLevel?"8-10":"6-8"} sentence English passage. Then ${isHigherLevel?10:7} questions:
 Q1-2: Điền vào chỗ trống (cloze) — type="gap_fill", [BLANK] in passage sentence, 4 word choices, test grammar/connector. correct=letter.
 Q3-5: Đọc hiểu — type="mcq", ask about passage meaning, inference, or detail. 4 options, NO [BLANK].
-Q6-7: Tìm từ đồng nghĩa/gần nghĩa — "In paragraph X, the word '___' is closest in meaning to:" 4 English options.`},
-{name:"Phần 4: Viết",count:7,sectionTitle:"WRITING",
+Q6-7: Tìm từ đồng nghĩa/gần nghĩa — "In paragraph X, the word '___' is closest in meaning to:" 4 English options.${isHigherLevel?`
+Q8: Điền vào chỗ trống (cloze) — thêm 1 câu tương tự Q1-2, blank KHÁC trong đoạn văn.
+Q9: Đọc hiểu — thêm 1 câu tương tự Q3-5, hỏi chi tiết/suy luận KHÁC.
+Q10: Tìm từ đồng nghĩa/gần nghĩa — thêm 1 câu tương tự Q6-7, từ KHÁC.`:""}`},
+{name:"Phần 4: Viết",count:isHigherLevel?10:7,sectionTitle:"WRITING",
 instruction:"Complete the writing tasks. Write your answers in English.",
 types:"word_order|writing",needsPassage:false,isListen:false,
-instructions:`EXACTLY 7 questions using student's ACTUAL data. ALL in English. NO MCQ.
+instructions:`EXACTLY ${isHigherLevel?10:7} questions using student's ACTUAL data. ALL in English. NO MCQ.
 Q1-2: type="word_order" — Take an ACTUAL sentence from student data. Scramble its words. correct=original sentence. options=[].
 Q3: type="writing" — "Rewrite using ALTHOUGH: [actual sentence from student data that shows contrast]" correct="open". options=[]. explanation=model answer.
 Q4: type="writing" — "Rewrite using BECAUSE/SINCE: [actual sentence from student data showing reason]" correct="open". options=[]. explanation=model answer.
 Q5: type="writing" — "Translate to English: [Vietnamese sentence closely related to student vocabulary]" correct="open". options=[]. explanation=English translation.
 Q6: type="writing" — "Write 2-3 English sentences about [topic found in student data]. Use: [3 words from vocabulary]" correct="open". options=[]. explanation=sample answer.
-Q7: type="writing" — "Complete this English sentence in a meaningful way: [beginning of sentence from student data] ___" correct="open". options=[]. explanation=suggested completion.`},
+Q7: type="writing" — "Complete this English sentence in a meaningful way: [beginning of sentence from student data] ___" correct="open". options=[]. explanation=suggested completion.${isHigherLevel?`
+Q8: type="word_order" — Take ANOTHER actual sentence from student data (different from Q1-2). Scramble its words. correct=original sentence. options=[].
+Q9: type="writing" — "Rewrite using SO...THAT/SUCH...THAT: [another sentence from student data]" correct="open". options=[]. explanation=model answer.
+Q10: type="writing" — "Write 2-3 English sentences about [a DIFFERENT topic from data]. Use: [3 different vocabulary words]" correct="open". options=[]. explanation=sample answer.`:""}`},
 ];
 setStatus("⏳ Đang tạo 4 phần thi song song...");
 const results=await Promise.all(partDefs.map(pd=>callAPI(mkPart(pd),3000)));
@@ -2836,20 +3887,25 @@ allParts=results.map((r,i)=>parseResult(r,partDefs[i].name));
 setStatus("✅ Đang lưu đề...");
 if(!allParts.length)throw new Error("AI không trả về đề hợp lệ");
 const totalQ=allParts.reduce((a,p)=>a+(p.sections||[]).reduce((b,s)=>b+(s.questions?.length||0),0),0);
-const examObj={key,title:examTitle,examType:isVocab?"vocab":_examType,level:domLevel,duration,questions:totalQ,parts:allParts,created:Date.now()};
-localStorage.setItem("exam_"+key,JSON.stringify(examObj));
-const idx=JSON.parse(localStorage.getItem("saved_exams")||"[]");
-idx.push({key,title:examTitle,level:domLevel,questions:totalQ,created:Date.now(),examType:examObj.examType});
-localStorage.setItem("saved_exams",JSON.stringify(idx));
+const finalFolderId = meta.kind==="de" ? await getOrCreateExamSubFolder(meta.folderId) : meta.folderId;
+if(!finalFolderId) throw new Error("Không xác định được folder để lưu đề.");
+const { data: examRow, error: insErr } = await supabase.from("mentor_exams").insert({
+  mentor_id: currentMentor.id, folder_id: finalFolderId, title: examTitle,
+  kind: meta.kind, exam_type: isVocab?"vocab":_examType, level: domLevel,
+  duration_minutes: duration, questions_count: totalQ, payload: { parts: allParts },
+}).select().single();
+if(insErr) throw new Error("Lỗi lưu đề: "+insErr.message);
+mentorExams.unshift(examRow);
 statusDiv.remove();
 const modeLabel2=isVocab?"bài ôn từ vựng":isIELTS?"đề IELTS":"đề PTTH";
-if(confirm(`✅ Đã tạo ${modeLabel2} "${examTitle}" (${totalQ} câu).\nMở bài thi ngay?`))examOpen(key);
+if(confirm(`✅ Đã tạo ${modeLabel2} "${examTitle}" (${totalQ} câu).\nMở bài thi ngay?`))examOpen(examRow.id);
 }catch(err){
 statusDiv.remove();
 alert("❌ Lỗi tạo đề: "+err.message+"\nCredit đã hoàn trả.");
-const s2=getStats();s2.credits=(s2.credits||0)+5;saveStats(s2);renderStats();
+const s2=getStats();s2.credits=(s2.credits||0)+10;saveStats(s2);renderStats();
 }
 }function openTest(){
+  if(_examKind==="de")populateExamFolderSelect();
   updateExamCreditInfo();
   loadSavedExamsList();
   document.getElementById("testOverlay").classList.add("open");
@@ -2999,7 +4055,9 @@ function getMock(sentence,level){
 async function callAI(sentence, level) {
   const content = await callWorker("analyze_sentence", { sentence, level });
   if (!content) {
-    // Worker lỗi/không phản hồi -> dùng dữ liệu demo để UI không bị treo
+    // Bị chặn có lý do (hết credit tầng Student) -> báo rõ cho Student, không dùng demo
+    if (lastBlockMessage) throw new Error(lastBlockMessage);
+    // Lỗi mạng thật -> dùng dữ liệu demo để UI không bị treo
     return getMock(sentence, level);
   }
   try { return JSON.parse(content); }
@@ -3219,7 +4277,7 @@ RULES: meaning in Vietnamese (1-5 words, never empty). example in English only (
             document.getElementById("abTime").textContent=`0 / ${lines.length} câu`;
             saveHistory(text,out.innerHTML);
             const st=getStats();updateStreak(st);
-            st.credits=(st.credits||0)+Math.max(1,lines.length);
+            st.credits=Math.max(0,(st.credits||0)-1);
             saveStats(st);renderStats();updateBadges();updateAIBadge();loadLibrarySidebar();
           }
         }
@@ -3232,22 +4290,30 @@ renderStats();updateBadges();updateAIBadge();
 
 // ===== EXAM OVERLAY SCRIPT =====
 
-let _exam={data:null,answers:{},submitted:false,timer:null,timeLeft:0,currentPart:0,woState:{}};
-function examOpen(key){
-  const raw=localStorage.getItem("exam_"+key);
-  if(!raw){alert("Không tìm thấy đề thi.");return;}
-  _exam.data=JSON.parse(raw);
+let _exam={data:null,answers:{},submitted:false,timer:null,timeLeft:0,currentPart:0,woState:{},attemptNumber:1,timeCapPct:100,startedAt:0};
+function examOpen(examId,opts){
+  const row=mentorExams.find(e=>e.id===examId) || (typeof studentExamItems!=="undefined" ? studentExamItems.find(e=>e.id===examId) : null);
+  if(!row){alert("Không tìm thấy đề thi.");return;}
+  _exam.data={
+    id: row.id, title: row.title, examType: row.exam_type, level: row.level,
+    duration: row.duration_minutes, questions: row.questions_count,
+    parts: row.payload?.parts||[], created: new Date(row.created_at).getTime(),
+  };
   _exam.answers={};_exam.submitted=false;_exam.currentPart=0;_exam.woState={};
+  _exam.attemptNumber=opts?.attemptNumber||1;
+  _exam.timeCapPct=opts?.timeCapPct||100;
+  _exam.startedAt=Date.now();
   clearInterval(_exam.timer);
   const d=_exam.data;
-  document.getElementById("examHdTitle").textContent=(d.examType==="ptth"?"🏫 PTTH":"🎓 IELTS")+" — "+d.title;
+  document.getElementById("examHdTitle").textContent=(d.examType==="ptth"?"🏫 PTTH":d.examType==="vocab"?"📝 Bài kiểm tra":"🎓 IELTS")+" — "+d.title;
   const totalQ=d.parts.reduce((a,p)=>a+(p.sections||[]).reduce((b,s)=>b+(s.questions?.length||0),0),0);
   document.getElementById("examHdSub").textContent=`Level ${d.level} · ${totalQ} câu · ${d.duration} phút`;
   document.getElementById("examOverlay").style.display="flex";
   document.body.style.overflow="hidden";
   examBuildTabs();
   examShowPart(0);
-  examStartTimer(d.duration||60);
+  const cappedDuration=Math.max(1,Math.round((d.duration||60)*_exam.timeCapPct/100));
+  examStartTimer(cappedDuration);
 }
 function examClose(){
   clearInterval(_exam.timer);
@@ -3617,13 +4683,32 @@ function examSubmit(timeUp=false){
       <div style="font-size:12px;color:#555">${b.ok}/${b.tot} (${b.tot?Math.round(b.ok/b.tot*100):0}%)</div>
     </div>`).join("");
   document.getElementById("examResultModal").style.display="flex";
-  // Save score
+  // Lưu điểm: Mentor tự test đề của mình -> cập nhật last_score trên mentor_exams.
+  // Student làm bài (xem task Student nộp bài) -> chèn thêm 1 dòng student_exam_submissions.
   try{
-    const d=JSON.parse(localStorage.getItem("exam_"+_exam.data.key)||"{}");
-    d.lastScore=pct;localStorage.setItem("exam_"+_exam.data.key,JSON.stringify(d));
-    const idx=JSON.parse(localStorage.getItem("saved_exams")||"[]");
-    const item=idx.find(e=>e.key===_exam.data.key);
-    if(item){item.lastScore=pct;localStorage.setItem("saved_exams",JSON.stringify(idx));}
+    const examId=_exam.data.id;
+    if(currentMentor&&examId){
+      supabase.from("mentor_exams").update({last_score:pct}).eq("id",examId).then(({error})=>{
+        if(error)console.error("update last_score error:",error);
+      });
+      const item=mentorExams.find(e=>e.id===examId);
+      if(item)item.last_score=pct;
+    }
+    if(typeof currentStudent!=="undefined"&&currentStudent&&examId){
+      const timeSpentSeconds=Math.max(0,Math.round((Date.now()-(_exam.startedAt||Date.now()))/1000));
+      supabase.from("student_exam_submissions").insert({
+        exam_id:examId, student_id:currentStudent.id,
+        answers:_exam.answers, score:pct, breakdown,
+        time_spent_seconds:timeSpentSeconds,
+      }).then(({error})=>{
+        if(!error)return;
+        console.error("insert submission error:",error);
+        // 23505 = unique_violation (uq_exam_student_attempt) — 2 lần nộp gần như đồng
+        // thời cùng tính trùng attempt_number, Postgres chỉ cho 1 request thắng.
+        if(error.code==="23505")alert("Đang xử lý lượt nộp trước, vui lòng thử lại sau.");
+        else if(error.message&&error.message.includes("Đã dùng hết 3 lượt"))alert("Đã dùng hết 3 lượt làm bài cho đề này.");
+      });
+    }
   }catch(e){}
 }
 function examShowAnswers(){
